@@ -1,7 +1,7 @@
 // Renders the create list page content.
 // Handles subroutes like /create-list/{subroute} (if needed)
 export function renderCreateListPage(path) {
-	const parts = path.split("/").filter(Boolean);
+	// const parts = path.split("/").filter(Boolean);
 	// parts[0] = "create-list"
 
 	return `

@@ -1,7 +1,7 @@
 // Renders the layout editor page content.
 // Handles subroutes like /layout-editor/{subroute} (if needed)
 export function renderLayoutEditorPage(path) {
-	const parts = path.split("/").filter(Boolean);
+	// const parts = path.split("/").filter(Boolean);
 	// parts[0] = "layout-editor"
 
 	return `
