@@ -16,7 +16,7 @@ Till "riktiga" framsidan:
 Layout: Val av butik --> Skapa butikslayout (om inte butikslayout finns redan, annars gå till nästa direkt) --> Skapa inköpslistan (uppsatt layout för butik)
 
 **Val av butik**
-- Auto complete sök för butik. Sök på stad eller butiksnamn för att få upp vilken butik du vill välja. (sökfält)
+- Autocomplete-sök för butik. Sök på stad eller butiksnamn för att få upp vilken butik du vill välja. (sökfält)
 - Sina senaste butikslayouter man har använt listas i en container nedanför sökrutan.
 - Man ska kunna klicka på "använd" på dessa butikslayouter man redan har använt och skickas då direkt till "skapa inköpslistan".
 - I sökrutans svar (dropdown) bör det stå exempelvis "Vi fann inga alternativ för din sökning, vill du skapa en butikslayout för butiken eller vill du använda en standard layout?". Behöver absolut inte stå så här, men tänket iaf.
