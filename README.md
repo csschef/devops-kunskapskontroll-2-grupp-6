@@ -6,7 +6,7 @@ Projektet utvecklar en smart inköpsapp som hjälper användaren att handla snab
 
 ## Länkar
 
-- Vercel: [Fyll i länk]
+- Vercel: https://vercel.com/csschef/devops-kunskapskontroll-2-grupp-6
 - Trello/Jira (valfritt): [Fyll i länk]
 
 ## Ansvarsområden
