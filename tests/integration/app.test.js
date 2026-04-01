@@ -1,7 +1,7 @@
 import { describe, test, expect, it, beforeEach, vi } from "vitest";
 
 const hasSupabaseEnv = Boolean(
-	import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_KEY,
+	import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY,
 )
 
 async function getSupabaseClient() {
