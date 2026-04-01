@@ -1,6 +1,6 @@
 // Renders the profile page content.
 // Handles subroutes like /profile/{subroute} (if needed)
-export function renderProfilePage(path) {
+export function renderProfilePage() {
 	// const parts = path.split("/").filter(Boolean);
 	// parts[0] = "profile"
 

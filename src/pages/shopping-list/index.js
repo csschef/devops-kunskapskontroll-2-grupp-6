@@ -1,6 +1,6 @@
 // Renders the shopping list page content.
 // Handles subroutes like /list/{subroute} (if needed)
-export function renderShoppingListPage(path) {
+export function renderShoppingListPage() {
 	// const parts = path.split("/").filter(Boolean);
 	// parts[0] = "list"
 
