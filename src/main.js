@@ -1,10 +1,12 @@
 // Main application entry point
 // This file initializes the SPA and mounts content into #app
+import { initRouter } from "./router/router.js";
 
 // Initialize app
 function initializeApp() {
   console.log('App initialized');
-  // TODO: Set up routing and render initial page
+  // Start the router which renders the correct page
+  initRouter();
 }
 
 // Start the app when DOM is ready
