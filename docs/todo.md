@@ -19,7 +19,7 @@ Layout: Val av butik --> Skapa butikslayout (om inte butikslayout finns redan, a
 - Auto complete sök för butik. Sök på stad eller butiksnamn för att få upp vilken butik du vill välja. (sökfält)
 - Sina senaste butikslayouter man har använt listas i en container nedanför sökrutan.
 - Man ska kunna klicka på "använd" på dessa butikslayouter man redan har använt och skickas då direkt till "skapa inköpslistan".
-- I sökrutans svar (dropdown) bör det står exempelvis "Vi fann inga alternativ för din sökning, vill du skapa en butikslayout för butiken eller vill du använda en standard layout?". Behöver absolut inte stå så här, men tänket iaf.
+- I sökrutans svar (dropdown) bör det stå exempelvis "Vi fann inga alternativ för din sökning, vill du skapa en butikslayout för butiken eller vill du använda en standard layout?". Behöver absolut inte stå så här, men tänket iaf.
 - Söker man på en butik och stad så bör man få upp alla butikslayouter för denna, som har skapats av användare. Dessa svar/alternativ ska rangordnas på totala användare som använder butikslayouten (föredraget kanske att man tar antalet inköpslistor som använder butikslayouten - max 1 per användare). Sin egenskapade layout för butiken bör vara högst upp, därefter alternativen från andra användare. - Alltid möjligheten till att skapa egen.
 - **Flöde:** Du söker efter en butik, du skapar en butikslayout om den inte finns (skickas då till butikslayout sidan för skapande), därefter skickas du in i inköpslistan (där är både skapande och visande samma sida).
 
