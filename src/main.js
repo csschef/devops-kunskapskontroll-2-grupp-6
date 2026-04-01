@@ -3,7 +3,6 @@
 
 // Initialize app
 function initializeApp() {
-  const app = document.getElementById('app');
   console.log('App initialized');
   // TODO: Set up routing and render initial page
 }
