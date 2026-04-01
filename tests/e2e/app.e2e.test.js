@@ -2,5 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("app root loads", async ({ page }) => {
 	await page.goto("/");
-	await expect(page.locator("body")).toBeVisible();
+	// Check that the main app container exists
+	const appElement = page.locator("#app");
+	await expect(appElement).toBeAttached();
 });

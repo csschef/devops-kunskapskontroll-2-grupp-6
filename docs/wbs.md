@@ -2,47 +2,59 @@
 
 ## Syfte
 
-Detta dokument delar upp arbetet per huvudsida i projektet.
-Ansvarig person fylls i senare.
+Detta dokument delar upp projektets obligatoriska arbete enligt uppgiftsbeskrivningen.
+Ansvariga fylls i efter intern fördelning i gruppen.
 
-## Roller och ansvar
+## Tider och inlämning
 
-- Ansvarig: [Fyll i namn]
-- Reviewer: [Fyll i namn]
+- Redovisning: Fredag 10/4 kl 08:00
+- Deadline: Fredag 10/4 kl 23:59
+- Inlämning: Public GitHub-repo, länk skickas via ItsLearning
+
+## Krav att uppfylla
+
+- CI/CD med GitHub Actions och Vercel
+- GitHub Rulesets
+- Tester: Unit, Integration, e2e (minst 1 test per sort och per deltagare.)
+- Versionshantering med PR och Code Review
+- Postgres med Supabase
+- API-anrop
+- Frontend
 
 ## Work Breakdown Structure
 
-| ID | Huvuddel | Deluppgift | Leverabel | Ansvarig |
+| ID | Område | Deluppgift | Leverabel | Ansvarig |
 |---|---|---|---|---|
-| 1 | Startsida (Välkommen) | Layout och navigation | Renderad startsida | [Namn] |
-| 1.1 | Startsida (Välkommen) | CTA till skapa lista/layout | Klickbar primärknapp | [Namn] |
-| 1.2 | Startsida (Välkommen) | Kort projektbeskrivning | Tydlig introduktionstext | [Namn] |
-| 2 | Sida för butikslayout | Skapa butik och sektioner | Form för ny layout | [Namn] |
-| 2.1 | Sida för butikslayout | Redigera ordning på sektioner | Sparad sekvens per butik | [Namn] |
-| 2.2 | Sida för butikslayout | Validering av inmatning | Felmeddelanden vid ogiltiga fält | [Namn] |
-| 3 | Detaljsida med inköpslista | Skapa och redigera lista | Aktiv inköpslista | [Namn] |
-| 3.1 | Detaljsida med inköpslista | Sortering efter butikens flöde | Sorterad varuordning | [Namn] |
-| 3.2 | Detaljsida med inköpslista | Checka av varor | Status på varor (klar/ej klar) | [Namn] |
-| 3.3 | Detaljsida med inköpslista | Delning via unikt ID | Delningsbar länk eller kod | [Namn] |
-| 4 | Infosida | Syfte och projektbakgrund | Publicerad infosida | [Namn] |
-| 4.1 | Infosida | Kontakt och buggrapportering | Kontaktväg + rapporteringssektion | [Namn] |
-| 5 | Sida för återkommande varor | Lista med förslag på återkommande varor | Funktion för förslag | [Namn] |
-| 5.1 | Sida för återkommande varor | Toggle för auto-inläggning | Valbart läge per vara | [Namn] |
-| 5.2 | Sida för återkommande varor | Regel för när listan populariseras | Dokumenterad triggerlogik | [Namn] |
-| 6 | Gemensamt | Datamappning produkt -> kategori -> zon | Stabil mappningslogik | [Namn] |
-| 6.1 | Gemensamt | API-inläsning av livsmedelsingredienser | Datakälla integrerad | [Namn] |
-| 6.2 | Gemensamt | Grundläggande test av huvudflöden | Testchecklista genomförd | [Namn] |
+| 1 | Projektsetup | Repo-struktur med dokumentation och kodmappar | Organiserat projektrepo | Alla |
+| 1.1 | Projektsetup | Lägg in behovsanalys i repo | Dokument tillgängligt i repot | Sebbe |
+| 1.2 | Projektsetup | Lägg in mockups/övriga bilagor vid behov | Filer tillgängliga i repot | Alla |
+| 1.3 | Projektsetup | Uppdatera README med ansvarsområden, Vercel-länk och ev. Trello-länk | Komplett README | Alla |
+| 2 | Frontend bas | Grundstruktur i index.html | Startstruktur för appen | Sebbe |
+| 2.1 | Frontend bas | Gemensam CSS-bas | Basstilar och layout | Sebbe |
+| 3 | Sidlogik | Skapa en JS-fil per sida för rendering | Separata JS-filer per sida | Hampus |
+| 3.1 | Sidlogik | Fördela sidor mellan gruppmedlemmar | Dokumenterad fördelning | Alla |
+| 3.2 | Sidlogik | Varje medlem bygger minst en sida med API-anrop | Färdiga sidor med datahämtning | Alla |
+| 4 | Databas | ER-diagram för nödvändiga tabeller | ER-diagram i repo | Hampus |
+| 4.1 | Databas | Skapa Supabase DB med minst 5 tabeller och relationer | DB-struktur i Supabase | Hampus |
+| 4.2 | Databas | Konfigurera Supabase API-åtkomst | Verifierade API-endpoints | Hampus |
+| 5 | CI/CD och kvalitet | GitHub Actions CI enligt guide | Grön pipeline i GitHub Actions | Sebbe |
+| 5.1 | CI/CD och kvalitet | Vercel deployment (CD) | Publik deployad app | Sebbe |
+| 5.2 | CI/CD och kvalitet | GitHub rulesets | Aktiva branch/PR-regler | Sebbe |
+| 6 | Tester | Unit-test per medlems del | Minst 1 unit-test per medlem | Alla |
+| 6.1 | Tester | Integrationstest per medlems del | Minst 1 integrationstest per medlem | Alla |
+| 6.2 | Tester | e2e-test per medlems del | Minst 1 e2e-test per medlem | Alla |
+| 7 | Versionshantering | Arbete via feature branches, PR och code review | Samtliga ändringar via PR | Alla |
+| 8 | Slutleverans | Kontrollera inlämningskrav och skicka repo-länk | Inlämning i tid | Alla |
 
 ## Milstolpar
 
 | Milstolpe | Innehåll | Deadline | Klar |
 |---|---|---|---|
-| M1 | Startsida + infosida | [Datum] | [ ] |
-| M2 | Butikslayout + inköpslista grundflöde | [Datum] | [ ] |
-| M3 | Sortering, delning, återkommande varor | [Datum] | [ ] |
-| M4 | Test, buggrättning, slutleverans | [Datum] | [ ] |
+| M1 | Setup, README och frontend-bas (index + CSS) | [Datum] | [ ] |
+| M2 | ER-diagram + Supabase DB + API-atkomst | [Datum] | [ ] |
+| M3 | Sidor med API-anrop + tester (unit/integration/e2e) | [Datum] | [ ] |
+| M4 | CI/CD, rulesets, PR-review och slutkontroll | 10/4 23:59 | [ ] |
 
 ## Kommentarer
 
-- Namn fylls i av gruppen efter fördelning.
-- Prioritera MVP: skapa lista -> välj butik -> sortera -> checka av.
+- Ansvar för JS-filer per sida fördelas senare av gruppen.
