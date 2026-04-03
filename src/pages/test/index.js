@@ -1,7 +1,7 @@
 // Test environment for CSS styling
 // Grid, form, button, and other elements to test global CSS
 
-export function renderCreateStoreLayoutPage() {
+export function renderGlobalStylesTestPage() {
 	return `
 		<div class="page-container">
 			<h1>Store Layout Editor</h1>
