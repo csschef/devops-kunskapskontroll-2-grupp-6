@@ -1,5 +1,6 @@
 // Main application entry point
 // This file initializes the SPA and mounts content into #app
+import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 import { initRouter, navigateTo } from "./router/router.js";
 import { onAuthStateChange } from "./auth-service.js";
 
