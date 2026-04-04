@@ -1,4 +1,5 @@
 import { ensureProfileRow, signInWithPassword } from "../../auth-service.js";
+import registerValidationConfig from "../../config/register-validation.json";
 import { navigateTo } from "../../router/router.js";
 
 // Kommer göra om denna sida också. Den funkar för tillfället. Men detta är bara en snabb placeholder utan att göra någon speciell design eller så.
@@ -17,7 +18,7 @@ export function renderLoginPage() {
 
                     <div class="form-group">
                         <label for="login-password">Lösenord</label>
-                        <input class="input-field" id="login-password" name="password" type="password" autocomplete="current-password" minlength="6" required />
+                        <input class="input-field" id="login-password" name="password" type="password" autocomplete="current-password" minlength="${Number(registerValidationConfig?.passwordRules?.minLength) || 8}" required />
                     </div>
 
                     <div class="button-group">
