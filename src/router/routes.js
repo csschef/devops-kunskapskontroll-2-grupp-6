@@ -55,8 +55,8 @@ export function resolveRoute(pathname) {
 		if (match) {
 			return {
 				render: route.render,
-        onMount: route.onMount,
-        requiresAuth: route.requiresAuth !== false,
+				onMount: route.onMount,
+				requiresAuth: route.requiresAuth !== false,
 				path: pathname,
 			};
 		}
@@ -69,8 +69,8 @@ export function resolveRoute(pathname) {
 				<p>Page not found.</p>
 			</section>
 		`,
-    onMount: undefined,
-    requiresAuth: false,
+		onMount: undefined,
+		requiresAuth: false,
 		path: pathname,
 	};
 }
