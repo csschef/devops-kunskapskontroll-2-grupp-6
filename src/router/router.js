@@ -9,7 +9,7 @@ async function renderCurrentRoute() {
   const route = resolveRoute(currentPath);
   const session = await getCurrentSession();
   const isAuthenticated = Boolean(session?.user);
-  const isAuthPage = currentPath.startsWith("/login") || currentPath.startsWith("/register");
+  const isAuthPage = /^\/(login|register)\/?$/.test(currentPath);
 
   if (route.requiresAuth && !isAuthenticated) {
     if (currentPath !== "/login") {
