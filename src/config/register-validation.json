@@ -1,0 +1,15 @@
+{
+    "nameRules": {
+        "minLetters": 2,
+        "blockedWords": [
+            "neger",
+            "nigger",
+            "fitta"
+        ]
+    },
+    "messages": {
+        "firstNameTooShort": "Förnamn måste vara minst {min} bokstäver.",
+        "lastNameTooShort": "Efternamn måste vara minst {min} bokstäver.",
+        "blockedName": "Namnet innehåller ord som inte är tillåtna."
+    }
+}
