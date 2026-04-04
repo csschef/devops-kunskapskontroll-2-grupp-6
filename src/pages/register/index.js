@@ -61,7 +61,7 @@ export function renderRegisterPage() {
 
                     <div class="form-group">
                         <label for="register-password">Lösenord</label>
-                        <input class="input-field" id="register-password" name="password" type="password" autocomplete="new-password" minlength="6" required />
+                        <input class="input-field" id="register-password" name="password" type="password" autocomplete="new-password" minlength="${minPasswordLength}" required />
                     </div>
 
                     <div class="button-group">
