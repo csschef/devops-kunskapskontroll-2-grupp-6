@@ -1,0 +1,275 @@
+/* =====================================================
+   Create List - Mobile First Page Styling
+   Scoped styles for create-list page only
+   ===================================================== */
+
+.create-list-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: 0 0 var(--spacing-xl);
+  background-color: var(--color-gray-100);
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+.create-list-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-white);
+  box-shadow: var(--shadow-sm);
+}
+
+.create-list__back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--spacing-2xl) + var(--spacing-md));
+  min-height: 44px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.create-list__back-button span {
+  display: block;
+  line-height: 1;
+}
+
+.create-list__title {
+  margin-bottom: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.create-list__step {
+  margin-bottom: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  text-align: right;
+}
+
+.create-list-hero {
+  padding: 0 var(--spacing-xs);
+}
+
+.create-list__helper-text {
+  margin-bottom: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.create-list__search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+}
+
+.create-list__section-title {
+  margin-bottom: 0;
+  font-size: var(--font-size-lg);
+}
+
+.create-list__field-group {
+  margin-bottom: 0;
+}
+
+.create-list__label {
+  margin-bottom: var(--spacing-xs);
+}
+
+.create-list__button {
+  width: 100%;
+  max-width: none;
+}
+
+.create-list__dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.create-list__dropdown[hidden],
+.create-list__layouts[hidden] {
+  display: none !important;
+}
+
+.create-list__button[hidden] {
+  display: none !important;
+}
+
+.create-list__dropdown-status {
+  margin: 0;
+  padding: var(--spacing-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.create-list__store-result {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card-default);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .create-list__store-result:hover {
+    border-color: var(--color-primary-200);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.create-list__store-result:active {
+  transform: translateY(0);
+  border-color: var(--color-primary-300);
+  background-color: var(--color-primary-50);
+}
+
+.create-list__store-result-name {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.create-list__store-result-meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.create-list__layouts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+}
+
+.create-list__selected-store,
+.create-list__selected-layout {
+  margin-bottom: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.layout-list,
+.create-list__layout-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.layout-card,
+.create-list__layout-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .layout-card:hover,
+  .create-list__layout-card:hover {
+    border-color: var(--color-primary-200);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.layout-card:active,
+.create-list__layout-card:active {
+  transform: translateY(0);
+}
+
+.create-list__layout-card--selected {
+  border-color: var(--color-primary-300);
+  background: linear-gradient(180deg, var(--color-primary-50), var(--color-white));
+  box-shadow: var(--shadow-md);
+}
+
+.layout-info,
+.create-list__layout-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.create-list__layout-name {
+  margin-bottom: 0;
+  font-size: var(--font-size-base);
+}
+
+.layout-usage,
+.create-list__layout-meta {
+  margin-bottom: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.create-list__selected-pill {
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.create-list__status-text {
+  margin-bottom: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.create-list__empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+}
+
+@media (min-width: 768px) {
+  .create-list-page {
+    gap: var(--spacing-xl);
+  }
+
+  .create-list-header {
+    padding: var(--spacing-md) var(--spacing-xl);
+  }
+
+  .create-list__title {
+    font-size: var(--font-size-xl);
+  }
+
+  .create-list__search,
+  .create-list__layouts {
+    padding: var(--spacing-xl);
+  }
+
+  .create-list__button {
+    width: fit-content;
+    min-width: var(--button-max-width);
+  }
+}

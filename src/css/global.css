@@ -536,6 +536,13 @@ label {
   transition: all var(--transition-normal);
 }
 
+.create-list__search-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+}
+
 @media (hover: hover) {
   .card:hover {
     box-shadow: var(--shadow-card-soft-hover);
@@ -609,6 +616,76 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-lg);
+}
+
+/* =====================================================
+   Compact Layout List
+   ===================================================== */
+
+.layout-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.layout-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-white);
+  cursor: pointer;
+  text-align: left;
+  min-height: 44px;
+  transition: background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .layout-row:hover {
+    background-color: var(--color-gray-50);
+    border-color: var(--color-primary-100);
+  }
+}
+
+.layout-row:active {
+  background-color: var(--color-primary-50);
+}
+
+.layout-row:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+.layout-row-info {
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
+}
+
+.layout-row-rating {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
+}
+
+.layout-row--selected {
+  border-color: var(--color-primary-500);
+  background-color: var(--color-primary-50);
+  box-shadow: var(--shadow-sm);
+}
+
+.layout-row--create .layout-row-info,
+.layout-row--create .layout-row-rating {
+  color: var(--color-text-secondary);
 }
 
 /* =====================================================
