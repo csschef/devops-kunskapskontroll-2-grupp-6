@@ -1,14 +1,35 @@
 import { resolveRoute } from "./routes.js";
+import { getCurrentSession } from "../auth-service.js";
 
-function renderCurrentRoute() {
+async function renderCurrentRoute() {
   const app = document.querySelector("#app");
+  if (!app) return;
 
-  if (!app) {
+  const currentPath = window.location.pathname;
+  const route = resolveRoute(currentPath);
+  const session = await getCurrentSession();
+  const isAuthenticated = Boolean(session?.user);
+  const isAuthPage = currentPath.startsWith("/login") || currentPath.startsWith("/register");
+
+  if (route.requiresAuth && !isAuthenticated) {
+    if (currentPath !== "/login") {
+      navigateTo("/login", { replace: true });
+    }
     return;
   }
 
-  const route = resolveRoute(window.location.pathname);
+  if (!route.requiresAuth && isAuthPage && isAuthenticated) {
+    if (currentPath !== "/") {
+      navigateTo("/", { replace: true });
+    }
+    return;
+  }
+
   app.innerHTML = route.render(route.path);
+
+  if (typeof route.onMount === "function") {
+    route.onMount(route.path);
+  }
 }
 
 // Initializes simple client-side routing.
@@ -17,7 +38,8 @@ export function initRouter() {
   window.addEventListener("popstate", renderCurrentRoute);
 }
 
-export function navigateTo(path) {
-  window.history.pushState({}, "", path);
+export function navigateTo(path, options = {}) {
+  const { replace = false } = options;
+  (replace ? window.history.replaceState : window.history.pushState).call(window.history, {}, "", path);
   renderCurrentRoute();
 }
