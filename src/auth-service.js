@@ -1,7 +1,7 @@
 import { supabase } from "./api-service.js";
 
 function requireSupabaseConfig() {
-    if (!supabase) throw new Error("Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+    if (!supabase) throw new Error("Supabase är inte konfigurerat. Ange VITE_SUPABASE_URL och VITE_SUPABASE_ANON_KEY.");
 }
 
 export async function getCurrentSession() {
