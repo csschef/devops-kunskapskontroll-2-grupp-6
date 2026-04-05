@@ -1,7 +1,6 @@
 import { ensureProfileRow, signUp } from "../../auth-service.js";
 import { navigateTo } from "../../router/router.js";
 import registerValidationConfig from "../../config/register-validation.json";
-import aisleLogoUrl from "../../assets/aisle-logo.svg";
 
 // Detta är bara en placeholder. Ska göra om hela sidan. Så i dagsläget är det bara en snabb och enkel design som suger xd.
 const minNameLetters = Number(registerValidationConfig?.nameRules?.minLetters) || 2;
@@ -44,7 +43,7 @@ export function renderRegisterPage() {
         <section class="auth-shell">
             <div class="auth-stage card">
                 <aside class="auth-brand-panel" aria-hidden="true">
-                    <img class="auth-brand-logo" src="${aisleLogoUrl}" alt="AISLE" />
+                    <p class="auth-kicker">AISLE</p>
                     <h1 class="auth-title">Skapa ditt konto.</h1>
                     <p class="auth-subtitle">Bygg smarta inköpslistor, hitta rätt ordning i butiken och synka allt mellan dina enheter.</p>
                     <ul class="auth-feature-list">

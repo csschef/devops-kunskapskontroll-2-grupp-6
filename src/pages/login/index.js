@@ -1,7 +1,6 @@
 import { ensureProfileRow, signInWithPassword } from "../../auth-service.js";
 import registerValidationConfig from "../../config/register-validation.json";
 import { navigateTo } from "../../router/router.js";
-import aisleLogoUrl from "../../assets/aisle-logo.svg";
 
 // Kommer göra om denna sida också. Den funkar för tillfället. Men detta är bara en snabb placeholder utan att göra någon speciell design eller så.
 export function renderLoginPage() {
@@ -11,7 +10,7 @@ export function renderLoginPage() {
         <section class="auth-shell">
             <div class="auth-stage card">
                 <aside class="auth-brand-panel" aria-hidden="true">
-                    <img class="auth-brand-logo" src="${aisleLogoUrl}" alt="AISLE" />
+                    <p class="auth-kicker">AISLE</p>
                     <h1 class="auth-title">Handla smartare, snabbare.</h1>
                     <p class="auth-subtitle">Logga in för att få tillgång till dina listor, butikslayouter och personliga flöde.</p>
                     <ul class="auth-feature-list">
