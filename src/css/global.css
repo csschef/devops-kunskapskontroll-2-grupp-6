@@ -795,6 +795,12 @@ label {
   border-bottom: 1px solid var(--color-border);
 }
 
+.auth-brand-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+}
+
 .auth-kicker {
   margin: 0;
   letter-spacing: 0.08em;
