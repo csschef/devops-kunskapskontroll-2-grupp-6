@@ -13,12 +13,25 @@ body.layout-editor-touch-dragging {
   margin: 0;
   padding: var(--spacing-xl);
   min-height: 100vh;
+  min-height: 100svh;
   position: relative;
   overflow: hidden;
+  background: transparent;
+}
+
+.layout-editor-fixed-bg {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100lvh;
   background: url("../assets/auth-bg.jpg") no-repeat;
   background-position: top;
   background-size: cover;
-  background-attachment: fixed;
+  z-index: 0;
+  pointer-events: none;
+  transform: translateZ(0);
 }
 
 .layout-editor-shell::before,
@@ -45,11 +58,18 @@ body.layout-editor-touch-dragging {
   background: radial-gradient(circle at center, var(--color-secondary-200) 0%, transparent 70%);
 }
 
+@media (hover: none) and (pointer: coarse) {
+  .layout-editor-shell::before,
+  .layout-editor-shell::after {
+    position: absolute;
+  }
+}
+
 #layout-editor-page {
   max-width: 1080px;
   padding: var(--spacing-md);
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 #layout-editor-header {

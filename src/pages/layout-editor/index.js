@@ -10,6 +10,7 @@ export function renderLayoutEditorPage() {
 
 	return `
 		<section class="layout-editor-shell">
+			<div class="layout-editor-fixed-bg" aria-hidden="true"></div>
 			<section class="page-container" id="layout-editor-page">
 			<header class="section-block card" id="layout-editor-header">
 				<section id="layout-editor-brand-panel">
