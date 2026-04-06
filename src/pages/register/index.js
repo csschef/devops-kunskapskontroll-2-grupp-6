@@ -1,8 +1,8 @@
 import { ensureProfileRow, signUp } from "../../auth-service.js";
 import { navigateTo } from "../../router/router.js";
 import registerValidationConfig from "../../config/register-validation.json";
+import aisleLogo from "../../assets/aisle-logo.svg";
 
-// Detta är bara en placeholder. Ska göra om hela sidan. Så i dagsläget är det bara en snabb och enkel design som suger xd.
 const minNameLetters = Number(registerValidationConfig?.nameRules?.minLetters) || 2;
 const minPasswordLength = Number(registerValidationConfig?.passwordRules?.minLength) || 8;
 const requirePasswordLetter = registerValidationConfig?.passwordRules?.requireLetter !== false;
@@ -43,12 +43,12 @@ export function renderRegisterPage() {
         <section class="auth-shell">
             <div class="auth-stage card">
                 <aside class="auth-brand-panel" aria-hidden="true">
-                    <p class="auth-kicker">AISLE</p>
+                    <span class="auth-logo" role="img" aria-label="AISLE logo" style="--auth-logo-src: url('${aisleLogo}')"></span>
                     <h1 class="auth-title">Skapa ditt konto.</h1>
                     <p class="auth-subtitle">Bygg smarta inköpslistor, hitta rätt ordning i butiken och synka allt mellan dina enheter.</p>
                     <ul class="auth-feature-list">
                         <li>Personligt konto med dina layouter</li>
-                        <li>Trygg inloggning via Supabase Auth</li>
+                        <li>Trygg inloggning & säkerhet</li>
                         <li>Redo för delning och samarbete</li>
                     </ul>
                 </aside>
@@ -56,10 +56,9 @@ export function renderRegisterPage() {
                 <div class="auth-form-panel">
                     <button class="auth-back-link" id="to-login" type="button" aria-label="Tillbaka till inloggning">
                         <i class="ti ti-arrow-left auth-back-icon" aria-hidden="true"></i>
-                        <span class="auth-back-text">Till inloggning</span>
+                        <span class="auth-back-text">Tillbaka till inloggning</span>
                     </button>
 
-                    <p class="auth-kicker">Nytt konto</p>
                     <h2 class="auth-form-title">Skapa konto</h2>
                     <p class="auth-form-description">Fyll i dina uppgifter för att komma igång.</p>
 
