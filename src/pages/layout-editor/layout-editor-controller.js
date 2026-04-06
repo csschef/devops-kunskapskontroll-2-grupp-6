@@ -19,15 +19,17 @@ const DESKTOP_LAYOUT_MIN_WIDTH = 900;
 function normalizeCategoryKey(name) {
 	return String(name || "")
 		.toLowerCase()
-		.trim();
+		.trim()
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "");
 }
 
 // Returnerar passande ikonklass baserat på kategorinamn.
 function getCategoryIconClass(name) {
 	const key = normalizeCategoryKey(name);
 
-	if (key.includes("frukt") || key.includes("grön") || key.includes("gronsak")) return "ti ti-apple";
-	if (key.includes("kött") || key.includes("fågel") || key.includes("kyckling")) return "ti ti-meat";
+	if (key.includes("frukt") || key.includes("gront") || key.includes("gronsak")) return "ti ti-apple";
+	if (key.includes("kott") || key.includes("fagel") || key.includes("kyckling")) return "ti ti-meat";
 	if (key.includes("mejeri")) return "ti ti-milk";
 	if (key.includes("brod") || key.includes("bageri")) return "ti ti-bread";
 	if (key.includes("frys") || key.includes("fryst")) return "ti ti-snowflake";
