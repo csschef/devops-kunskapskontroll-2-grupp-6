@@ -12,6 +12,17 @@ body.layout-editor-touch-dragging {
   padding: var(--spacing-md);
 }
 
+#layout-editor-header {
+  padding: var(--spacing-lg);
+}
+
+#layout-editor-divider {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: var(--spacing-lg) calc(-1 * var(--spacing-lg));
+  width: calc(100% + (2 * var(--spacing-lg)));
+}
+
 #layout-editor-page p {
   color: var(--color-text-secondary);
 }
@@ -22,16 +33,32 @@ body.layout-editor-touch-dragging {
   }
 }
 
-.layout-section-block {
-  padding: 0;
-}
-
 #layout-editor-instructions {
   margin-top: var(--spacing-md);
 }
 
+#layout-editor-heading-group {
+  display: grid;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+#layout-editor-page #layout-editor-brand-mark {
+  letter-spacing: 0.08em;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  color: var(--color-primary-700);
+  font-weight: var(--font-weight-semibold);
+  margin: 0;
+}
+
+#layout-editor-heading-group h1 {
+  margin: 0;
+}
+
 #layout-editor-builder-card {
   width: 100%;
+  padding: var(--spacing-lg);
 }
 
 #layout-editor-route-image {
@@ -137,6 +164,25 @@ body.layout-editor-touch-dragging {
 #layout-editor-lists {
   display: grid;
   gap: var(--spacing-lg);
+  padding: 0;
+}
+
+.layout-editor-list-title {
+  font-size: var(--font-size-xl);
+}
+
+#layout-editor-actions {
+  text-align: center;
+}
+
+#layout-editor-save-button,
+#layout-editor-cancel-button {
+  width: 100%;
+  max-width: none;
+}
+
+#layout-editor-cancel-button {
+  margin-top: 12px;
 }
 
 #layout-editor-inactive-list .layout-editor-section-card,

@@ -11,6 +11,7 @@ let pendingDropTargetCard = null;
 let touchClientX = 0;
 let touchClientY = 0;
 let touchAutoScrollFrameId = null;
+let pageLifecycleAbortController = null;
 const DEV_FALLBACK_CATEGORIES = ["Frukt och Grönt", "Kött och Fågel", "Mejeri", "Bröd", "Frys"];
 const DESKTOP_LAYOUT_MIN_WIDTH = 900;
 
@@ -40,7 +41,18 @@ function getCategoryIconClass(name) {
 
 // Renderar en lista av kategorikort i angiven container.
 function renderCategoryCards(container, categories) {
-	container.innerHTML = categories.map((category) => renderCategoryCard(category)).join("");
+	container.replaceChildren();
+
+	const fragment = document.createDocumentFragment();
+
+	for (const category of categories) {
+		const cardElement = createCategoryCardElement(category);
+		if (cardElement) {
+			fragment.appendChild(cardElement);
+		}
+	}
+
+	container.appendChild(fragment);
 }
 
 // Kontrollerar att elementet är ett dragbart kategorikort.
@@ -292,7 +304,7 @@ function stopTouchAutoScroll() {
 	cancelAnimationFrame(touchAutoScrollFrameId);
 	touchAutoScrollFrameId = null;
 }
- 
+
 // Kör auto-scroll-loop under touch-drag.
 function runTouchAutoScrollLoop() {
 	if (!isDraggableCard(touchDraggedCard)) {
@@ -378,12 +390,11 @@ function setupTouchDragAndDrop() {
 	bindTouchDragAndDrop(activeList);
 	bindTouchDragAndDrop(inactiveList);
 
-	if (document.body.dataset.layoutTouchDndBound === "true") return;
-	document.body.dataset.layoutTouchDndBound = "true";
+	if (!pageLifecycleAbortController) return;
 
-	document.addEventListener("touchmove", handleDocumentTouchMove, { passive: false });
-	document.addEventListener("touchend", endTouchDragging);
-	document.addEventListener("touchcancel", endTouchDragging);
+	document.addEventListener("touchmove", handleDocumentTouchMove, { passive: false, signal: pageLifecycleAbortController.signal });
+	document.addEventListener("touchend", endTouchDragging, { signal: pageLifecycleAbortController.signal });
+	document.addEventListener("touchcancel", endTouchDragging, { signal: pageLifecycleAbortController.signal });
 }
 
 // Binder mus-baserad drag-and-drop till en lista en gång.
@@ -406,18 +417,39 @@ function setupDragAndDrop() {
 	bindDragAndDropToList(inactiveList);
 }
 
-// Returnerar HTML för ett enskilt kategorikort.
-function renderCategoryCard(name) {
+// Skapar ett kategorikort med DOM-API för att undvika HTML-injektion.
+function createCategoryCardElement(name) {
 	const safeName = String(name || "").trim();
-	if (!safeName) return "";
+	if (!safeName) return null;
 	const iconClass = getCategoryIconClass(safeName);
+	const card = document.createElement("li");
+	const icon = document.createElement("i");
+	const label = document.createElement("span");
 
-	return `<li class="grid-item layout-editor-section-card" data-section-name="${safeName}" draggable="true"><i class="${iconClass} layout-editor-category-icon" aria-hidden="true"></i><span class="layout-editor-category-name">${safeName}</span></li>`;
+	card.className = "grid-item layout-editor-section-card";
+	card.dataset.sectionName = safeName;
+	card.setAttribute("draggable", "true");
+
+	icon.className = `${iconClass} layout-editor-category-icon`;
+	icon.setAttribute("aria-hidden", "true");
+
+	label.className = "layout-editor-category-name";
+	label.textContent = safeName;
+
+	card.append(icon, label);
+
+	return card;
 }
 
 // Renderar statusrad i inaktiv-listan, t.ex. laddningstext.
 function renderInactiveListState(container, message) {
-	container.innerHTML = `<li class="grid-item layout-editor-section-card" draggable="false">${message}</li>`;
+	const stateRow = document.createElement("li");
+
+	stateRow.className = "grid-item layout-editor-section-card";
+	stateRow.setAttribute("draggable", "false");
+	stateRow.textContent = String(message || "");
+
+	container.replaceChildren(stateRow);
 }
 
 // Hämtar kategorier och renderar dem i inaktiv-listan.
@@ -442,8 +474,47 @@ async function populateInactiveSectionList() {
 	}
 }
 
+// Returnerar true om layout-editor-sidan finns monterad i DOM.
+function isLayoutEditorPageMounted() {
+	return Boolean(document.querySelector("#layout-editor-page"));
+}
+
+// Städar upp listeners och tillfällig drag-state när sidan avmonteras.
+function teardownLayoutEditorPage() {
+	if (pageLifecycleAbortController) {
+		pageLifecycleAbortController.abort();
+		pageLifecycleAbortController = null;
+	}
+
+	stopTouchAutoScroll();
+	clearDropMarker();
+	clearPendingDropTarget();
+	setTouchDragScrollLock(false);
+
+	if (mouseDraggedCard) {
+		mouseDraggedCard.classList.remove("is-dragging");
+	}
+
+	if (touchDraggedCard) {
+		touchDraggedCard.classList.remove("is-dragging");
+	}
+
+	mouseDraggedCard = null;
+	touchDraggedCard = null;
+	touchClientX = 0;
+	touchClientY = 0;
+}
+
 // Initierar hela layout-editorns interaktion och datahämtning.
 export function setupLayoutEditorPage() {
+	teardownLayoutEditorPage();
+
+	if (!isLayoutEditorPageMounted()) {
+		return;
+	}
+
+	pageLifecycleAbortController = new AbortController();
+
 	syncInstructionsByViewport();
 	bindInstructionsViewportSync();
 	setupDragAndDrop();
@@ -466,8 +537,7 @@ function syncInstructionsByViewport() {
 
 // Binder resize-lyssnare en gång för att hålla instruktionspanelens state korrekt.
 function bindInstructionsViewportSync() {
-	if (document.body.dataset.layoutInstructionsViewportBound === "true") return;
-	document.body.dataset.layoutInstructionsViewportBound = "true";
+	if (!pageLifecycleAbortController) return;
 
-	window.addEventListener("resize", syncInstructionsByViewport);
+	window.addEventListener("resize", syncInstructionsByViewport, { signal: pageLifecycleAbortController.signal });
 }
