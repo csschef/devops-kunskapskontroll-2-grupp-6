@@ -1,0 +1,320 @@
+/* =====================================================
+   Layout Editor Page Styles
+   ===================================================== */
+
+body.layout-editor-touch-dragging {
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+#layout-editor-page {
+  max-width: 1080px;
+  padding: var(--spacing-md);
+}
+
+#layout-editor-page p {
+  color: var(--color-text-secondary);
+}
+
+@media (min-width: 768px) {
+  #layout-editor-page {
+    padding: var(--spacing-md);
+  }
+}
+
+.layout-section-block {
+  padding: 0;
+}
+
+#layout-editor-instructions {
+  margin-top: var(--spacing-md);
+}
+
+#layout-editor-builder-card {
+  width: 100%;
+}
+
+#layout-editor-route-image {
+  display: none;
+}
+
+#layout-editor-instructions-toggle {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  margin-bottom: var(--spacing-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+#layout-editor-instructions-toggle::-webkit-details-marker {
+  display: none;
+}
+
+#layout-editor-instructions-toggle::after {
+  content: "";
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: linear-gradient(135deg, var(--color-secondary-50), var(--color-secondary-100));
+  background-image:
+    linear-gradient(var(--color-secondary-700), var(--color-secondary-700)),
+    linear-gradient(var(--color-secondary-700), var(--color-secondary-700)),
+    linear-gradient(135deg, var(--color-secondary-50), var(--color-secondary-100));
+  background-repeat: no-repeat;
+  background-position: center, center, center;
+  background-size: 10px 1.5px, 1.5px 10px, 100% 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transform: rotate(0deg);
+  transition: transform var(--transition-fast), background-size var(--transition-fast);
+}
+
+#layout-editor-instructions[open] #layout-editor-instructions-toggle::after {
+  transform: rotate(45deg);
+  background-size: 10px 1.5px, 1.5px 10px, 100% 100%;
+}
+
+#layout-editor-instructions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+#layout-editor-instructions-list li {
+  position: relative;
+  padding-left: calc(var(--spacing-lg) + var(--spacing-sm));
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+#layout-editor-instructions-list li::before {
+  content: "";
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-300));
+  width: 10px;
+  height: 10px;
+  position: absolute;
+  top: .5em;
+  left: 0;
+}
+
+#layout-editor-active-list,
+#layout-editor-inactive-list {
+  list-style: none;
+  display: grid;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+  min-height: 64px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+}
+
+#layout-editor-active-list .layout-editor-drop-marker,
+#layout-editor-inactive-list .layout-editor-drop-marker {
+  min-height: 52px;
+  border: 2px dashed var(--color-success-400);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, var(--color-success-50), transparent);
+}
+
+#layout-editor-active-list .layout-editor-drop-marker.layout-editor-drop-marker-danger,
+#layout-editor-inactive-list .layout-editor-drop-marker.layout-editor-drop-marker-danger {
+  border-color: var(--color-warning-400);
+  background: linear-gradient(180deg, var(--color-warning-50), transparent);
+}
+
+#layout-editor-lists {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+#layout-editor-inactive-list .layout-editor-section-card,
+#layout-editor-active-list .layout-editor-section-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  justify-content: flex-start;
+  min-height: 52px;
+  padding: var(--spacing-sm) calc(var(--spacing-lg) + 18px) var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#layout-editor-inactive-list .layout-editor-section-card {
+  background-color: var(--color-gray-50);
+  border-color: var(--color-gray-200);
+  color: var(--color-text-secondary);
+}
+
+#layout-editor-active-list .layout-editor-section-card {
+  background-color: var(--color-success-50);
+  border-color: var(--color-success-200);
+  color: var(--color-text);
+}
+
+#layout-editor-inactive-list .layout-editor-category-icon,
+#layout-editor-active-list .layout-editor-category-icon {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-secondary-600);
+  flex-shrink: 0;
+}
+
+#layout-editor-active-list .layout-editor-category-icon {
+  color: var(--color-success-700);
+}
+
+#layout-editor-inactive-list .layout-editor-category-name,
+#layout-editor-active-list .layout-editor-category-name {
+  min-width: 0;
+}
+
+#layout-editor-inactive-list .layout-editor-section-card.is-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+#layout-editor-active-list .layout-editor-section-card.is-dragging {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: grabbing;
+}
+
+#layout-editor-inactive-list .layout-editor-section-card::after,
+#layout-editor-active-list .layout-editor-section-card::after {
+  content: "";
+  position: absolute;
+  right: calc(var(--spacing-md) + 5px);
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-secondary-300);
+  transform: translateY(-50%);
+  box-shadow:
+    0 -5px 0 var(--color-secondary-300),
+    0 5px 0 var(--color-secondary-300),
+    5px 0 0 var(--color-secondary-300),
+    5px -5px 0 var(--color-secondary-300),
+    5px 5px 0 var(--color-secondary-300);
+}
+
+#layout-editor-active-list .layout-editor-section-card::after {
+  background: var(--color-success-500);
+  box-shadow:
+    0 -5px 0 var(--color-success-500),
+    0 5px 0 var(--color-success-500),
+    5px 0 0 var(--color-success-500),
+    5px -5px 0 var(--color-success-500),
+    5px 5px 0 var(--color-success-500);
+}
+
+@media (min-width: 900px) {
+  #layout-editor-header {
+    display: flex;
+    gap: var(--spacing-xl);
+    align-items: flex-start;
+  }
+
+  #layout-editor-brand-panel {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--spacing-sm);
+    padding: clamp(28px, 4vw, 48px);
+    position: sticky;
+    top: clamp(28px, 4vw, 48px);
+    align-self: flex-start;
+    max-height: calc(100dvh - (2 * clamp(28px, 4vw, 48px)));
+    overflow: auto;
+    border-right: 1px solid var(--color-border);
+  }
+
+  #layout-editor-heading-group {
+    gap: var(--spacing-xs) !important;
+    margin-bottom: var(--spacing-sm) !important;
+  }
+
+  #layout-editor-brand-panel > p,
+  #layout-editor-instructions {
+    margin-top: 0;
+  }
+
+  #layout-editor-brand-panel > p {
+    margin-bottom: var(--spacing-sm);
+  }
+
+  #layout-editor-header > hr {
+    display: none;
+  }
+
+  #layout-editor-builder-card {
+    flex: 0 1 46%;
+    min-width: 380px;
+    padding: clamp(28px, 4vw, 48px) !important;
+  }
+
+  #layout-editor-instructions {
+    position: static;
+    padding-right: 0;
+  }
+
+  #layout-editor-instructions-toggle {
+    display: none;
+  }
+
+  #layout-editor-instructions:not([open]) > :not(summary) {
+    display: block !important;
+  }
+
+  #layout-editor-instructions-body {
+    display: block !important;
+    padding-top: 0;
+  }
+
+  #layout-editor-actions {
+    display: flex;
+    align-items: stretch;
+    gap: var(--spacing-md);
+    text-align: left !important;
+  }
+
+  #layout-editor-save-button,
+  #layout-editor-cancel-button {
+    width: 100% !important;
+    flex: 1 1 0;
+    max-width: none !important;
+    min-width: 0;
+  }
+
+  #layout-editor-cancel-button {
+    margin-top: 0 !important;
+  }
+
+  #layout-editor-message {
+    margin-bottom: 0;
+  }
+
+  #layout-editor-route-image {
+    display: block;
+    width: 60%;
+    max-width: 312px;
+    margin: var(--spacing-md) auto 0;
+  }
+}
