@@ -149,6 +149,11 @@ function commitPendingDrop(draggedCard) {
 	const list = pendingDropTargetList;
 	if (!list) return;
 
+	if (currentDropMarkerElement && currentDropMarkerElement.parentElement === list) {
+		list.insertBefore(draggedCard, currentDropMarkerElement);
+		return;
+	}
+
 	if (isInactiveList(list)) {
 		if (draggedCard.parentElement !== list) {
 			list.appendChild(draggedCard);
@@ -163,19 +168,18 @@ function commitPendingDrop(draggedCard) {
 		return;
 	}
 
-	list.insertBefore(draggedCard, targetCard);
-}
+	if (draggedCard.parentElement === list) {
+		const draggableCards = getDraggableCards(list, null);
+		const draggedIndex = draggableCards.indexOf(draggedCard);
+		const targetIndex = draggableCards.indexOf(targetCard);
 
-// Hämtar kortet som ursprungligen låg efter det dragna kortet.
-function getInitialTargetCardFromSource(draggedCard) {
-	if (!draggedCard) return null;
-
-	const nextSibling = draggedCard.nextElementSibling;
-	if (nextSibling && nextSibling.matches(DND_CARD_SELECTOR)) {
-		return nextSibling;
+		if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex < targetIndex) {
+			list.insertBefore(draggedCard, targetCard.nextElementSibling);
+			return;
+		}
 	}
 
-	return null;
+	list.insertBefore(draggedCard, targetCard);
 }
 
 // Returnerar true om drop inte skulle ändra något.
@@ -186,16 +190,9 @@ function isNoOpDropTarget(list, targetCard, draggedCard) {
 		return draggedCard.parentElement === list;
 	}
 
-	if (draggedCard.parentElement !== list) {
-		return false;
-	}
-
-	const initialTargetCard = getInitialTargetCardFromSource(draggedCard);
-	if (targetCard) {
-		return targetCard === initialTargetCard;
-	}
-
-	return !initialTargetCard;
+	// För aktiv-listan tillåter vi alltid omordningsförsök.
+	// Tidigare no-op-filter kunde feltolka giltiga drag och blockera drop-state.
+	return false;
 }
 
 // Uppdaterar drop-state och visar markör endast vid verklig förändring.
@@ -255,8 +252,14 @@ function handleListDrop(event) {
 	if (!isDraggableCard(draggedCard)) return;
 
 	event.preventDefault();
-	const targetCard = isInactiveList(list) ? null : getDropTargetCard(list, event.clientY, draggedCard);
-	updateDropTargetState(list, targetCard, draggedCard);
+
+	// Använd den senast beräknade drop-target från dragover när den finns,
+	// eftersom drop-eventets koordinater kan vara opålitliga i vissa desktop-lägen.
+	if (pendingDropTargetList !== list) {
+		const targetCard = isInactiveList(list) ? null : getDropTargetCard(list, event.clientY, draggedCard);
+		updateDropTargetState(list, targetCard, draggedCard);
+	}
+
 	commitPendingDrop(draggedCard);
 }
 
