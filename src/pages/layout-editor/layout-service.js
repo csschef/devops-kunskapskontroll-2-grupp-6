@@ -2,21 +2,32 @@ import { supabase } from "../../api-service.js";
 
 const SECTION_CATEGORIES_TABLE = "categories";
 
-function uniqueNames(names) {
+function normalizeSlug(value) {
+	return String(value || "")
+		.toLowerCase()
+		.trim()
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[_\s]+/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+function uniqueSlugs(values) {
 	const seen = new Set();
-	const normalizedNames = [];
+	const normalizedSlugs = [];
 
-	for (const rawName of names) {
-		const name = String(rawName || "").trim();
+	for (const rawValue of values) {
+		const slug = normalizeSlug(rawValue);
 
-		if (!name) continue;
-		if (seen.has(name.toLowerCase())) continue;
+		if (!slug) continue;
+		if (seen.has(slug)) continue;
 
-		seen.add(name.toLowerCase());
-		normalizedNames.push(name);
+		seen.add(slug);
+		normalizedSlugs.push(slug);
 	}
 
-	return normalizedNames;
+	return normalizedSlugs;
 }
 
 export async function fetchSectionCategories() {
@@ -49,6 +60,6 @@ export async function fetchSectionCategories() {
 		throw wrappedError;
 	}
 
-	const names = Array.isArray(data) ? data.map((row) => row?.name) : [];
-	return uniqueNames(names);
+	const slugs = Array.isArray(data) ? data.map((row) => row?.name) : [];
+	return uniqueSlugs(slugs);
 }

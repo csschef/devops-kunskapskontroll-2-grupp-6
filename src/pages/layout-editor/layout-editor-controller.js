@@ -14,8 +14,37 @@ let touchClientX = 0;
 let touchClientY = 0;
 let touchAutoScrollFrameId = null;
 let pageLifecycleAbortController = null;
-const DEV_FALLBACK_CATEGORIES = ["Frukt och Grönt", "Kött och Fågel", "Mejeri", "Bröd", "Frys"];
 const DESKTOP_LAYOUT_MIN_WIDTH = 900;
+
+const SECTION_LABEL_BY_SLUG = {
+	"frukt-gront": "Frukt & Grönt",
+	"brod-bakverk": "Bröd & Bakverk",
+	"kott-fagel": "Kött & Fågel",
+	"fisk-skaldjur": "Fisk & Skaldjur",
+	"chark-palagg": "Chark & Pålägg",
+	"mejeri-agg": "Mejeri & Ägg",
+	"frysvaror": "Frysvaror",
+	"torrvaror": "Torrvaror",
+	"hygien-hushall": "Hygien & Hushåll",
+	"dryck": "Dryck",
+	"snacks-godis": "Snacks & Godis",
+	"ovrigt": "Övrigt",
+};
+
+const SECTION_ICON_BY_SLUG = {
+	"frukt-gront": "ti ti-apple",
+	"brod-bakverk": "ti ti-bread",
+	"kott-fagel": "ti ti-meat",
+	"fisk-skaldjur": "ti ti-fish",
+	"chark-palagg": "ti ti-sausage",
+	"mejeri-agg": "ti ti-milk",
+	"frysvaror": "ti ti-snowflake",
+	"torrvaror": "ti ti-package",
+	"hygien-hushall": "ti ti-spray",
+	"dryck": "ti ti-bottle",
+	"snacks-godis": "ti ti-candy",
+	"ovrigt": "ti ti-tag",
+};
 
 // Normaliserar kategorinamnet så jämförelser blir stabila.
 function normalizeCategoryKey(name) {
@@ -26,8 +55,40 @@ function normalizeCategoryKey(name) {
 		.replace(/[\u0300-\u036f]/g, "");
 }
 
+// Normaliserar sektion-slug till ett stabilt format.
+function normalizeSectionSlug(value) {
+	return String(value || "")
+		.toLowerCase()
+		.trim()
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[_\s]+/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+// Returnerar läsbar svensk etikett för sektionens slug.
+function getSectionDisplayName(slug) {
+	const normalizedSlug = normalizeSectionSlug(slug);
+	if (!normalizedSlug) return "";
+
+	if (SECTION_LABEL_BY_SLUG[normalizedSlug]) {
+		return SECTION_LABEL_BY_SLUG[normalizedSlug];
+	}
+
+	return normalizedSlug
+		.split("-")
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(" ");
+}
+
 // Returnerar passande ikonklass baserat på kategorinamn.
 function getCategoryIconClass(name) {
+	const normalizedSlug = normalizeSectionSlug(name);
+	if (SECTION_ICON_BY_SLUG[normalizedSlug]) {
+		return SECTION_ICON_BY_SLUG[normalizedSlug];
+	}
+
 	const key = normalizeCategoryKey(name);
 
 	if (key.includes("frukt") || key.includes("gront") || key.includes("gronsak")) return "ti ti-apple";
@@ -448,24 +509,25 @@ function setupDragAndDrop() {
 }
 
 // Skapar ett kategorikort med DOM-API för att undvika HTML-injektion.
-function createCategoryCardElement(name) {
-	const safeName = String(name || "").trim();
-	if (!safeName) return null;
-	const iconClass = getCategoryIconClass(safeName);
+function createCategoryCardElement(slug) {
+	const normalizedSlug = normalizeSectionSlug(slug);
+	if (!normalizedSlug) return null;
+	const iconClass = getCategoryIconClass(normalizedSlug);
+	const sectionLabel = getSectionDisplayName(normalizedSlug);
 	const card = document.createElement("li");
 	const icon = document.createElement("i");
 	const label = document.createElement("span");
 	const dragHandle = document.createElement("span");
 
 	card.className = "grid-item layout-editor-section-card";
-	card.dataset.sectionName = safeName;
+	card.dataset.sectionName = normalizedSlug;
 	card.setAttribute("draggable", "true");
 
 	icon.className = `${iconClass} layout-editor-category-icon`;
 	icon.setAttribute("aria-hidden", "true");
 
 	label.className = "layout-editor-category-name";
-	label.textContent = safeName;
+	label.textContent = sectionLabel;
 
 	dragHandle.className = "layout-editor-drag-handle";
 	dragHandle.setAttribute("aria-label", "Dra för att flytta sektionen");
@@ -496,17 +558,17 @@ async function populateInactiveSectionList() {
 	renderInactiveListState(inactiveList, "Hämtar kategorier...");
 
 	try {
-		const categories = await fetchSectionCategories();
+		const categorySlugs = await fetchSectionCategories();
 
-		if (!Array.isArray(categories) || categories.length === 0) {
-			renderCategoryCards(inactiveList, DEV_FALLBACK_CATEGORIES);
+		if (!Array.isArray(categorySlugs) || categorySlugs.length === 0) {
+			renderInactiveListState(inactiveList, "Inga sektioner hittades.");
 			return;
 		}
 
-		renderCategoryCards(inactiveList, categories);
+		renderCategoryCards(inactiveList, categorySlugs);
 	} catch (error) {
-		console.warn("Category fetch failed, using fallback categories:", error);
-		renderCategoryCards(inactiveList, DEV_FALLBACK_CATEGORIES);
+		console.warn("Category fetch failed:", error);
+		renderInactiveListState(inactiveList, "Kunde inte hämta sektioner.");
 	}
 }
 
