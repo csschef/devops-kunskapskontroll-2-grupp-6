@@ -1,8 +1,10 @@
 import { fetchSectionCategories } from "./layout-service.js";
 
 const DND_CARD_SELECTOR = ".layout-editor-section-card";
+const DND_HANDLE_SELECTOR = ".layout-editor-drag-handle";
 const TOUCH_AUTO_SCROLL_EDGE_PX = 88;
 const TOUCH_AUTO_SCROLL_MAX_STEP = 18;
+const FULL_CARD_DRAG_MIN_WIDTH = 1920;
 let touchDraggedCard = null;
 let mouseDraggedCard = null;
 let currentDropMarkerElement = null;
@@ -62,6 +64,17 @@ function isDraggableCard(card) {
 	return Boolean(card && card.matches(DND_CARD_SELECTOR) && card.getAttribute("draggable") === "true");
 }
 
+// Kontrollerar att dragstart kom från kortets handtag.
+function isDragHandleTarget(target) {
+	return Boolean(target?.closest(DND_HANDLE_SELECTOR));
+}
+
+// På bred desktop med fin pekare tillåts drag från hela kortet.
+function isWholeCardMouseDragEnabled() {
+	const hasFinePointer = window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches;
+	return Boolean(hasFinePointer && window.innerWidth >= FULL_CARD_DRAG_MIN_WIDTH);
+}
+
 // Hämtar dragbara kort i listan, exklusive det kort som dras.
 function getDraggableCards(list, draggedCard) {
 	if (!list) return [];
@@ -118,6 +131,12 @@ function setDropMarker(list, targetCard, draggedCard) {
 
 	if (targetCard) {
 		list.insertBefore(currentDropMarkerElement, targetCard);
+		return;
+	}
+
+	// När man drar från aktiv till inaktiv ska markören visas överst i listan.
+	if (isActiveToInactiveMove(list, draggedCard) && isInactiveList(list)) {
+		list.insertBefore(currentDropMarkerElement, list.firstElementChild || null);
 		return;
 	}
 
@@ -211,6 +230,10 @@ function updateDropTargetState(list, targetCard, draggedCard) {
 function handleCardDragStart(event) {
 	const card = event.target.closest(DND_CARD_SELECTOR);
 	if (!isDraggableCard(card)) return;
+	if (!isWholeCardMouseDragEnabled() && !isDragHandleTarget(event.target)) {
+		event.preventDefault();
+		return;
+	}
 
 	mouseDraggedCard = card;
 	card.classList.add("is-dragging");
@@ -334,6 +357,8 @@ function startTouchAutoScroll() {
 
 // Initierar touch-drag när användaren börjar dra ett kort.
 function handleListTouchStart(event) {
+	if (!isDragHandleTarget(event.target)) return;
+
 	const card = event.target.closest(DND_CARD_SELECTOR);
 	if (!isDraggableCard(card)) return;
 	event.preventDefault();
@@ -430,6 +455,7 @@ function createCategoryCardElement(name) {
 	const card = document.createElement("li");
 	const icon = document.createElement("i");
 	const label = document.createElement("span");
+	const dragHandle = document.createElement("span");
 
 	card.className = "grid-item layout-editor-section-card";
 	card.dataset.sectionName = safeName;
@@ -441,7 +467,12 @@ function createCategoryCardElement(name) {
 	label.className = "layout-editor-category-name";
 	label.textContent = safeName;
 
-	card.append(icon, label);
+	dragHandle.className = "layout-editor-drag-handle";
+	dragHandle.setAttribute("aria-label", "Dra för att flytta sektionen");
+	dragHandle.setAttribute("title", "Dra för att flytta sektionen");
+	dragHandle.setAttribute("draggable", "true");
+
+	card.append(icon, label, dragHandle);
 
 	return card;
 }

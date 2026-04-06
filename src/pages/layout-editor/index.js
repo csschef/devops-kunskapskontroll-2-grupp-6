@@ -43,6 +43,7 @@ export function renderLayoutEditorPage() {
 
 				<section class="card" id="layout-editor-builder-card">
 				<section id="layout-editor-store-meta">
+					<h4>Butiksinformation</h4>
 					<div class="form-group" id="layout-editor-store-name-group">
 						<label for="layout-editor-store-name">Butiksnamn</label>
 						<input type="text" class="input-field" id="layout-editor-store-name" name="storeName" placeholder="Ex: ICA Maxi" required />
@@ -56,12 +57,12 @@ export function renderLayoutEditorPage() {
 
 				<section class="section-block" id="layout-editor-lists">
 					<section id="layout-editor-active-wrapper">
-						<h2 class="layout-editor-list-title">Valda avdelningar</h2>
+						<h4>Valda sektioner</h4>
 						<ul id="layout-editor-active-list" aria-label="Aktiv butikslayout"></ul>
 					</section>
 
 					<section id="layout-editor-inactive-wrapper">
-						<h2 class="layout-editor-list-title">Ej valda avdelningar</h2>
+						<h4>Tillgängliga sektioner</h4>
 						<ul id="layout-editor-inactive-list" aria-label="Tillgängliga sektioner">
 							<li class="grid-item layout-editor-section-card" draggable="false">Hämtar kategorier...</li>
 						</ul>
