@@ -1,5 +1,6 @@
 import { setupLayoutEditorPage } from "./layout-editor-controller.js";
 import "../../css/layout-editor.css";
+import aisleLogo from "../../assets/aisle-logo.svg";
 
 const layoutEditorRouteImageUrl = new URL("../../assets/images/point-a-to-b.png", import.meta.url).href;
 
@@ -8,11 +9,12 @@ export function renderLayoutEditorPage() {
 	setTimeout(setupLayoutEditorPage, 0);
 
 	return `
-		<section class="page-container" id="layout-editor-page">
+		<section class="layout-editor-shell">
+			<section class="page-container" id="layout-editor-page">
 			<header class="section-block card" id="layout-editor-header">
 				<section id="layout-editor-brand-panel">
 					<div id="layout-editor-heading-group">
-						<p id="layout-editor-brand-mark">AISLE</p>
+						<span class="auth-logo layout-editor-logo" role="img" aria-label="AISLE logo" style="--auth-logo-src: url('${aisleLogo}')"></span>
 						<h1>Skapa din butikslayout</h1>
 					</div>
 					<p>Lägg till gångordningen för din butik genom att dra sektioner i rätt ordning.</p>
@@ -72,6 +74,7 @@ export function renderLayoutEditorPage() {
 				</footer>
 				</section>
 			</header>
+			</section>
 		</section>
 	`;
 }

@@ -7,9 +7,46 @@ body.layout-editor-touch-dragging {
   overscroll-behavior: none;
 }
 
+.layout-editor-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: var(--spacing-xl);
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background: url("../assets/auth-bg.jpg") no-repeat;
+  background-size: cover;
+}
+
+.layout-editor-shell::before,
+.layout-editor-shell::after {
+  content: "";
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border-radius: var(--radius-full);
+  z-index: 0;
+  filter: blur(2px);
+}
+
+.layout-editor-shell::before {
+  top: -80px;
+  left: -80px;
+  background: radial-gradient(circle at center, var(--color-primary-200) 0%, transparent 70%);
+}
+
+.layout-editor-shell::after {
+  bottom: -90px;
+  right: -60px;
+  background: radial-gradient(circle at center, var(--color-secondary-200) 0%, transparent 70%);
+}
+
 #layout-editor-page {
   max-width: 1080px;
   padding: var(--spacing-md);
+  position: relative;
+  z-index: 1;
 }
 
 #layout-editor-header {
@@ -43,13 +80,10 @@ body.layout-editor-touch-dragging {
   margin-bottom: var(--spacing-lg);
 }
 
-#layout-editor-page #layout-editor-brand-mark {
-  letter-spacing: 0.08em;
-  font-size: var(--font-size-sm);
-  text-transform: uppercase;
-  color: var(--color-primary-700);
-  font-weight: var(--font-weight-semibold);
-  margin: 0;
+.layout-editor-logo {
+  width: 116px;
+  height: 40px;
+  margin-bottom: var(--spacing-sm);
 }
 
 #layout-editor-heading-group h1 {
@@ -361,5 +395,17 @@ body.layout-editor-touch-dragging {
     width: 60%;
     max-width: 312px;
     margin: var(--spacing-md) auto 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .layout-editor-shell {
+    padding: var(--spacing-md);
+  }
+
+  .layout-editor-shell::before,
+  .layout-editor-shell::after {
+    width: 180px;
+    height: 180px;
   }
 }
