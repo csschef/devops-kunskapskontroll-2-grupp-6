@@ -74,20 +74,6 @@ function getDropTargetCard(list, pointerY, draggedCard) {
 	return closestCard;
 }
 
-// Flyttar kort inom samma lista till rätt position.
-function moveCardInList(list, draggedCard, pointerY) {
-	if (!list || !draggedCard) return;
-
-	const targetCard = getDropTargetCard(list, pointerY, draggedCard);
-
-	if (!targetCard) {
-		list.appendChild(draggedCard);
-		return;
-	}
-
-	list.insertBefore(draggedCard, targetCard);
-}
-
 // Avgör om listan är inaktiv-listan.
 function isInactiveList(list) {
 	return Boolean(list && list.id === "layout-editor-inactive-list");
