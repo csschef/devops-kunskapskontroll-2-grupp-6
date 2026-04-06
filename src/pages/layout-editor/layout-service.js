@@ -38,7 +38,15 @@ export async function fetchSectionCategories() {
 			throw new Error("Kunde inte läsa categories. Kontrollera RLS policy för SELECT på categories.");
 		}
 
-		throw error;
+		if (error instanceof Error) {
+			throw error;
+		}
+
+		const wrappedError = new Error(message || "Ett okänt fel uppstod vid hämtning av categories.");
+		if (code) {
+			wrappedError.code = code;
+		}
+		throw wrappedError;
 	}
 
 	const names = Array.isArray(data) ? data.map((row) => row?.name) : [];
