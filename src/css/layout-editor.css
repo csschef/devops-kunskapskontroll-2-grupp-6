@@ -16,18 +16,21 @@ body.layout-editor-touch-dragging {
   position: relative;
   overflow: hidden;
   background: url("../assets/auth-bg.jpg") no-repeat;
+  background-position: top;
   background-size: cover;
+  background-attachment: fixed;
 }
 
 .layout-editor-shell::before,
 .layout-editor-shell::after {
   content: "";
-  position: absolute;
+  position: fixed;
   width: 260px;
   height: 260px;
   border-radius: var(--radius-full);
   z-index: 0;
   filter: blur(2px);
+  pointer-events: none;
 }
 
 .layout-editor-shell::before {

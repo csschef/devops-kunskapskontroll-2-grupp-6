@@ -55,12 +55,12 @@ export function renderLayoutEditorPage() {
 
 				<section class="section-block" id="layout-editor-lists">
 					<section id="layout-editor-active-wrapper">
-						<h2 class="layout-editor-list-title">Aktiva avdelningar</h2>
+						<h2 class="layout-editor-list-title">Valda avdelningar</h2>
 						<ul id="layout-editor-active-list" aria-label="Aktiv butikslayout"></ul>
 					</section>
 
 					<section id="layout-editor-inactive-wrapper">
-						<h2 class="layout-editor-list-title">Inaktiva avdelningar</h2>
+						<h2 class="layout-editor-list-title">Ej valda avdelningar</h2>
 						<ul id="layout-editor-inactive-list" aria-label="Tillgängliga sektioner">
 							<li class="grid-item layout-editor-section-card" draggable="false">Hämtar kategorier...</li>
 						</ul>
