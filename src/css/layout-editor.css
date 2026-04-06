@@ -237,7 +237,6 @@ body.layout-editor-touch-dragging {
 
 #layout-editor-active-list .layout-editor-section-card.is-dragging {
   opacity: 0.55;
-  pointer-events: none;
   cursor: grabbing;
 }
 
