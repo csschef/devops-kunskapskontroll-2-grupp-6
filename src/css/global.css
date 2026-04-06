@@ -725,15 +725,15 @@ label {
   max-width: none;
   margin: 0;
   padding: var(--spacing-xl);
-  min-height: 100dvh;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(160deg, var(--color-primary-50) 0%, var(--color-background) 38%, var(--color-secondary-50) 100%);
+  background: url("../assets/auth-bg.jpg") no-repeat;
+  background-size: auto;
+  background-size: cover;
 }
 
 .auth-shell::before,
@@ -764,10 +764,7 @@ label {
   max-width: 1080px;
   padding: 0;
   border-radius: var(--radius-xl);
-  background:
-    radial-gradient(120% 140% at 0% 0%, var(--color-primary-50) 0%, transparent 45%),
-    radial-gradient(120% 120% at 100% 100%, var(--color-secondary-100) 0%, transparent 40%),
-    var(--gradient-card-default);
+  background: radial-gradient(120% 140% at 0% 0%, var(--color-primary-50) 0%, transparent 45%), radial-gradient(120% 120% at 100% 100%, var(--color-secondary-100) 0%, transparent 40%), var(--gradient-card-default);
   display: grid;
   gap: var(--spacing-xl);
   position: relative;
@@ -802,6 +799,23 @@ label {
   text-transform: uppercase;
   color: var(--color-primary-700);
   font-weight: var(--font-weight-semibold);
+}
+
+.auth-logo {
+  display: block;
+  height: 50px;
+  width: 148px;
+  align-self: flex-start;
+  margin-inline: 0;
+  background-color: var(--color-text);
+  -webkit-mask-image: var(--auth-logo-src);
+  mask-image: var(--auth-logo-src);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: left center;
+  mask-position: left center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
 .auth-title {
