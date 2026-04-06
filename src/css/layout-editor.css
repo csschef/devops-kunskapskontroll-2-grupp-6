@@ -182,7 +182,7 @@ body.layout-editor-touch-dragging {
 }
 
 #layout-editor-cancel-button {
-  margin-top: 12px;
+  margin-top: var(--spacing-sm);
 }
 
 #layout-editor-inactive-list .layout-editor-section-card,
