@@ -1,4 +1,10 @@
-import { searchStores, findOrCreateStore, getStoreLayoutsRanked, getCurrentUserId } from "./api.js";
+import {
+	searchStores,
+	findOrCreateStore,
+	getStoreLayoutsRanked,
+	getCurrentUserId,
+	createShoppingList,
+} from "./api.js";
 import { navigateTo } from "../../router/router.js";
 import "./create-list.css";
 
@@ -18,14 +24,39 @@ const state = {
 	currentUserId: null,
 	searchError: "",
 	layoutsError: "",
+	isCreatingList: false,
+	createListError: "",
 };
 
 let searchDebounceTimer;
 let latestSearchRequestId = 0;
 let pageEventController;
 
-function applyCityFilter() {
-	state.storeResults = [...state.rawStoreResults];
+async function createListAndNavigate(layoutId = null) {
+	if (!state.selectedStore) {
+		return;
+	}
+
+	state.isCreatingList = true;
+	state.createListError = "";
+	renderLayouts();
+
+	try {
+		const listId = await createShoppingList({
+			storeId: state.selectedStore.id,
+			layoutId,
+			userId: state.currentUserId,
+			title: "Min Inkoplista",
+		});
+
+		navigateTo(`/list/${listId}`);
+	} catch (error) {
+		console.error("Failed to create shopping list", error);
+		state.createListError = "Kunde inte skapa listan. Forsok igen.";
+	} finally {
+		state.isCreatingList = false;
+		renderLayouts();
+	}
 }
 
 function setFindOrCreateButtonState() {
@@ -160,14 +191,40 @@ function renderLayouts() {
 	selectedStoreName.textContent = `${state.selectedStore.name} - ${state.selectedStore.city}`;
 
 	if (state.layoutsError) {
-		list.innerHTML = `<p class="create-list__status-text">${state.layoutsError}</p>`;
+		list.innerHTML = `
+			<p class="create-list__status-text">${state.layoutsError}</p>
+			<button
+				type="button"
+				class="layout-row"
+				data-skip-layout="true"
+				aria-label="Fortsatt utan layout"
+			>
+				<span class="layout-row-info">Fortsatt utan layout (temporärt)</span>
+				<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
+			</button>
+		`;
 		selectedLayoutSummary.textContent = "";
 		return;
+	}
+
+	if (state.isCreatingList) {
+		selectedLayoutSummary.textContent = "Skapar inkopslista...";
+	} else if (state.createListError) {
+		selectedLayoutSummary.textContent = state.createListError;
 	}
 
 	if (state.layouts.length === 0) {
 		list.innerHTML = `
 			<p class="create-list__status-text">Det finns inga layouter för den här butiken än.</p>
+			<button
+				type="button"
+				class="layout-row"
+				data-skip-layout="true"
+				aria-label="Fortsatt utan layout"
+			>
+				<span class="layout-row-info">Fortsatt utan layout (temporart)</span>
+				<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
+			</button>
 			<button
 				type="button"
 				class="layout-row layout-row--create"
@@ -202,6 +259,15 @@ function renderLayouts() {
 				`,
 			)
 			.join("") +
+		`<button
+			type="button"
+			class="layout-row"
+			data-skip-layout="true"
+			aria-label="Fortsatt utan layout"
+		>
+			<span class="layout-row-info">Fortsatt utan layout (temporart)</span>
+			<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
+		</button>` +
 		`<button
 			type="button"
 			class="layout-row layout-row--create"
@@ -266,6 +332,7 @@ async function handleStoreSelection(storeId) {
 	state.selectedStore = selected;
 	state.selectedLayout = null;
 	state.layoutsError = "";
+	state.createListError = "";
 	state.layouts = [];
 	state.isStoreDropdownOpen = false;
 	renderStoreResults();
@@ -473,7 +540,16 @@ function initCreateListPage() {
 
 	layoutList.addEventListener(
 		"click",
-		(event) => {
+		async (event) => {
+			const skipLayoutButton = event.target.closest("[data-skip-layout]");
+
+			if (skipLayoutButton) {
+				state.selectedLayout = null;
+				state.currentStep = "layout-skipped";
+				await createListAndNavigate(null);
+				return;
+			}
+
 			const createLayoutButton = event.target.closest("[data-create-layout]");
 
 			if (createLayoutButton) {
@@ -497,12 +573,7 @@ function initCreateListPage() {
 
 			state.selectedLayout = layout;
 			state.currentStep = "layout-selected";
-			renderLayouts();
-
-			console.log("Proceed to next step", {
-				store: state.selectedStore,
-				layout: state.selectedLayout,
-			});
+			await createListAndNavigate(state.selectedLayout.id);
 		},
 		{ signal },
 	);

@@ -1,88 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-let localMockModulePromise;
-
-async function getLocalMockModule() {
-  if (!localMockModulePromise) {
-    localMockModulePromise = import(
-      /* @vite-ignore */ "./mock-data.local.js"
-    ).catch(() => null);
-  }
-
-  return localMockModulePromise;
-}
-
-async function searchStoresFromMocks({ storeName, city }) {
-  const mockModule = await getLocalMockModule();
-
-  if (!mockModule?.mockStores) {
-    return null;
-  }
-
-  const trimmedStoreName = storeName.trim().toLowerCase();
-  const trimmedCity = city.trim().toLowerCase();
-
-  return mockModule.mockStores
-    .filter((store) => {
-      const storeNameMatches = !trimmedStoreName
-        || String(store.name || "").toLowerCase().includes(trimmedStoreName);
-      const cityMatches = !trimmedCity || String(store.city || "").toLowerCase().includes(trimmedCity);
-      return storeNameMatches && cityMatches;
-    })
-    .slice(0, 10);
-}
-
-async function findOrCreateStoreFromMocks({ storeName, city }) {
-  const mockModule = await getLocalMockModule();
-
-  if (!mockModule?.mockStores) {
-    return null;
-  }
-
-  const trimmedStoreName = storeName.trim();
-  const trimmedCity = city.trim();
-
-  const existingStore = mockModule.mockStores.find(
-    (store) => store.name.toLowerCase() === trimmedStoreName.toLowerCase()
-      && store.city.toLowerCase() === trimmedCity.toLowerCase(),
-  );
-
-  if (existingStore) {
-    return existingStore;
-  }
-
-  const newStore = {
-    id: `local-${Date.now()}`,
-    name: trimmedStoreName,
-    city: trimmedCity,
-  };
-
-  mockModule.mockStores.push(newStore);
-  return newStore;
-}
-
-async function loadStoreLayoutsFromMocks(storeId) {
-  const mockModule = await getLocalMockModule();
-
-  if (!mockModule?.mockLayoutsByStoreId) {
-    return null;
-  }
-
-  return mockModule.mockLayoutsByStoreId[storeId] ?? [];
-}
+import { supabase } from "../../api-service.js";
 
 export async function searchStores({ storeName, city }) {
-	// Use local mock data in development when available.
-  const mockData = await searchStoresFromMocks({ storeName, city });
-
-  if (mockData) {
-    return mockData;
-  }
-
   const trimmedStoreName = storeName.trim();
   const trimmedCity = city.trim();
 
@@ -111,13 +29,6 @@ export async function searchStores({ storeName, city }) {
 }
 
 export async function findOrCreateStore({ storeName, city }) {
-	// Try local mock storage first to keep UI flow working without backend.
-  const mockStore = await findOrCreateStoreFromMocks({ storeName, city });
-
-  if (mockStore) {
-    return mockStore;
-  }
-
   const trimmedStoreName = storeName.trim();
   const trimmedCity = city.trim();
 
@@ -159,13 +70,6 @@ export async function findOrCreateStore({ storeName, city }) {
 }
 
 export async function loadStoreLayouts(storeId) {
-	// Return layouts for one store ordered by newest first.
-  const mockLayouts = await loadStoreLayoutsFromMocks(storeId);
-
-  if (mockLayouts) {
-    return mockLayouts;
-  }
-
   if (!storeId) {
     return [];
   }
@@ -184,31 +88,19 @@ export async function loadStoreLayouts(storeId) {
 }
 
 export async function getStoreLayoutsRanked(storeId) {
-	// Read ranked layout usage so popular layouts can be shown first.
-  const mockLayouts = await loadStoreLayoutsFromMocks(storeId);
-
-  if (mockLayouts) {
-    return mockLayouts.map((layout) => ({
-      ...layout,
-      usage_count: Number(layout.usage_count ?? 0),
-    }));
-  }
-
   if (!storeId) {
     return [];
   }
 
-  const { data, error } = await supabase
-    .from("store_layouts_ranked")
-    .select("*")
-    .eq("store_id", storeId)
-    .order("usage_count", { ascending: false });
+  // Derive ranked output from store_layouts to avoid dependency on optional SQL views.
+  const layouts = await loadStoreLayouts(storeId);
 
-  if (error) {
-    throw error;
-  }
-
-  return data ?? [];
+  return [...layouts]
+    .map((layout) => ({
+      ...layout,
+      usage_count: Number(layout.usage_count ?? 0),
+    }))
+    .sort((a, b) => Number(b.usage_count ?? 0) - Number(a.usage_count ?? 0));
 }
 
 export async function getCurrentUserId() {
@@ -220,4 +112,53 @@ export async function getCurrentUserId() {
   }
 
   return data?.user?.id ?? null;
+}
+
+export async function createShoppingList({
+  storeId,
+  layoutId,
+  userId,
+  title = "Min Inkoplista",
+}) {
+  const basePayloads = [
+    { store_id: storeId, store_layout_id: layoutId, title },
+    { store_id: storeId, layout_id: layoutId, title },
+    { store_id: storeId, title },
+  ];
+
+  const payloadCandidates = basePayloads.flatMap((payload) => {
+    if (!userId) {
+      return [payload];
+    }
+
+    return [
+      { ...payload, user_id: userId },
+      { ...payload, created_by: userId },
+      payload,
+    ];
+  });
+
+  let lastError = null;
+
+  for (const payload of payloadCandidates) {
+    const { data, error } = await supabase
+      .from("shopping_lists")
+      .insert(payload)
+      .select("id")
+      .single();
+
+    if (!error && data?.id) {
+      return data.id;
+    }
+
+    if (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  throw new Error("Failed to create shopping list.");
 }

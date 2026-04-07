@@ -18,7 +18,7 @@ export const routes = [
     render: (path) => renderLayoutEditorPage(path),
   },
   {
-    pattern: /^\/list($|\/)/,
+    pattern: /^\/list\/[^/]+\/?$/,
     render: (path) => renderShoppingListPage(path),
   },
   {
