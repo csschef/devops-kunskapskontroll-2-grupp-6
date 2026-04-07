@@ -3,6 +3,7 @@
 export function renderCreateListPage() {
 	// const parts = path.split("/").filter(Boolean);
 	// parts[0] = "create-list"
+	document.title = "AISLE - Skapa inköpslista";
 
 	return `
 		<section>

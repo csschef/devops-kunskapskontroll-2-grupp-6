@@ -6,6 +6,7 @@ import { navigateTo } from "../../router/router.js";
 export function renderProfilePage() {
 	// const parts = path.split("/").filter(Boolean);
 	// parts[0] = "profile"
+	document.title = "AISLE - Profil";
 
 	return `
 		<section class="page-container">

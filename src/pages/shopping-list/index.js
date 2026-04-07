@@ -3,6 +3,7 @@
 export function renderShoppingListPage() {
 	// const parts = path.split("/").filter(Boolean);
 	// parts[0] = "list"
+	document.title = "AISLE - Inköpslista";
 
 	return `
 		<section>
