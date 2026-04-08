@@ -1,15 +1,16 @@
 import { navigateTo } from "../../router/router.js";
 import {
-	addCustomItem,
-	addItemToList,
+	addShoppingListItem,
 	deleteListItem,
 	getShoppingList,
 	getShoppingListItems,
+	getStoreLayouts,
+	getStores,
 	getSuggestedProducts,
 	searchProducts,
 	toggleItemChecked,
 	updateItemNotes,
-	updateShoppingListTitle,
+	updateShoppingListStoreAndLayout,
 } from "./api.js";
 import "./shopping-list.css";
 
@@ -26,11 +27,15 @@ const state = {
 	dismissedSuggestionIds: new Set(),
 	expandedNotesItemId: null,
 	noteDraftByItemId: new Map(),
-	listTitleDraft: "",
-	isSavingTitle: false,
 	searchDebounceTimer: null,
-	titleDebounceTimer: null,
 	noteSaveTimers: new Map(),
+	stores: [],
+	storeLayouts: [],
+	selectedStoreId: "",
+	selectedLayoutId: "",
+	isStoreEditorOpen: false,
+	isStoreEditorSaving: false,
+	storeEditorError: "",
 };
 
 let pageEventController;
@@ -56,16 +61,14 @@ function resetTransientState() {
 		state.searchDebounceTimer = null;
 	}
 
-	if (state.titleDebounceTimer) {
-		clearTimeout(state.titleDebounceTimer);
-		state.titleDebounceTimer = null;
-	}
-
 	for (const timer of state.noteSaveTimers.values()) {
 		clearTimeout(timer);
 	}
 
 	state.noteSaveTimers.clear();
+	state.isStoreEditorOpen = false;
+	state.isStoreEditorSaving = false;
+	state.storeEditorError = "";
 }
 
 function getCategoryOrderMap() {
@@ -142,6 +145,13 @@ function buildGroups() {
 
 function renderProductSearchResults() {
 	const container = document.querySelector("#list-product-search-results");
+	const searchInput = document.querySelector("#list-product-search");
+
+	const setExpanded = (isExpanded) => {
+		if (searchInput) {
+			searchInput.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+		}
+	};
 
 	if (!container) {
 		return;
@@ -149,33 +159,63 @@ function renderProductSearchResults() {
 
 	if (state.isSearchingProducts) {
 		container.hidden = false;
+		setExpanded(true);
 		container.innerHTML = '<p class="list-page__status">Soker produkter...</p>';
 		return;
 	}
 
 	if (!state.searchQuery.trim()) {
 		container.hidden = true;
+		setExpanded(false);
 		container.innerHTML = "";
 		return;
 	}
 
-	if (state.searchResults.length === 0) {
+	const normalizedQuery = state.searchQuery.trim().toLocaleLowerCase("sv");
+	const hasExactProductMatch = state.searchResults.some(
+		(product) => String(product.name ?? "").trim().toLocaleLowerCase("sv") === normalizedQuery,
+	);
+	const showCustomOption = !hasExactProductMatch;
+
+	const options = [
+		...state.searchResults.map((product) => ({
+			id: `product-${product.id}`,
+			type: "product",
+			label: product.name,
+			productId: product.id,
+		})),
+		...(showCustomOption
+			? [{
+				id: "custom-option",
+				type: "custom",
+				label: `Lagg till '${state.searchQuery.trim()}' som Okategoriserat`,
+				customName: state.searchQuery.trim(),
+			}]
+			: []),
+	];
+
+	if (options.length === 0) {
 		container.hidden = false;
+		setExpanded(true);
 		container.innerHTML = '<p class="list-page__status">Inga produkter hittades.</p>';
 		return;
 	}
 
 	container.hidden = false;
-	container.innerHTML = state.searchResults
+	setExpanded(true);
+	container.innerHTML = options
 		.map(
-			(product) => `
+			(option) => `
 				<button
 					type="button"
-					class="list-page__search-result"
-					data-add-product-id="${escapeHtml(product.id)}"
-					aria-label="Lagg till ${escapeHtml(product.name)}"
+					role="option"
+					class="list-page__search-result ${option.type === "custom" ? "list-page__search-result--custom" : ""}"
+					data-add-option-type="${escapeHtml(option.type)}"
+					data-add-product-id="${option.productId ? escapeHtml(option.productId) : ""}"
+					data-add-custom-name="${option.customName ? escapeHtml(option.customName) : ""}"
+					aria-label="${escapeHtml(option.label)}"
 				>
-					${escapeHtml(product.name)}
+					${escapeHtml(option.label)}
 				</button>
 			`,
 		)
@@ -317,25 +357,17 @@ function renderGroups() {
 		.join("");
 
 	const diverseMarkup = `
-		<section class="list-page__group card" aria-label="Diverse">
-			<h2 class="list-page__section-title">Diverse</h2>
-			<ul class="list-page__items">
-				${diverseItems.map((item) => renderItemRow(item)).join("")}
-			</ul>
-			<form id="list-custom-item-form" class="list-page__custom-form">
-				<label for="list-custom-item-input" class="list-page__label">Lagg till egen vara</label>
-				<div class="list-page__custom-row">
-					<input
-						id="list-custom-item-input"
-						class="input-field"
-						type="text"
-						placeholder="Exempel: Strumpor"
-						aria-label="Lagg till custom item"
-					/>
-					<button type="submit" class="btn btn-primary list-page__custom-submit">Lagg till</button>
-				</div>
-			</form>
-		</section>
+		${diverseItems.length > 0
+			? `
+				<section class="list-page__group card" aria-label="Diverse">
+					<h2 class="list-page__section-title">Diverse</h2>
+					<ul class="list-page__items">
+						${diverseItems.map((item) => renderItemRow(item)).join("")}
+					</ul>
+				</section>
+			`
+			: ""
+		}
 	`;
 
 	const completedMarkup = completedItems.length > 0
@@ -353,16 +385,72 @@ function renderGroups() {
 }
 
 function renderTitleAndStore() {
-	const titleInput = document.querySelector("#list-title-input");
+	const storeToggle = document.querySelector("#list-store-toggle");
 	const storeLabel = document.querySelector("#list-store-label");
-
-	if (titleInput) {
-		titleInput.value = state.listTitleDraft || "Min Inkoplista";
-	}
+	const storeEditor = document.querySelector("#list-store-editor");
+	const storeSelect = document.querySelector("#list-store-select");
+	const layoutSelect = document.querySelector("#list-layout-select");
+	const saveButton = document.querySelector("#list-store-save");
+	const status = document.querySelector("#list-store-editor-status");
+	const storeChevron = document.querySelector("#list-store-chevron");
 
 	if (storeLabel) {
 		const storeName = state.list?.store?.name || "Okand butik";
-		storeLabel.textContent = `Byt butik: ${storeName}`;
+		const rawLayoutName = String(state.list?.layout?.name ?? "").trim();
+		const isDuplicateLayoutName = rawLayoutName
+			&& rawLayoutName.toLocaleLowerCase("sv") === String(storeName).trim().toLocaleLowerCase("sv");
+		const layoutSuffix = rawLayoutName && !isDuplicateLayoutName ? ` - ${rawLayoutName}` : "";
+		const displayValue = `${storeName}${layoutSuffix}`;
+
+		storeLabel.innerHTML = `
+			<span class="list-page__store-subheader-prefix">Byt butik:</span>
+			<span class="list-page__store-subheader-value">${escapeHtml(displayValue)}</span>
+		`;
+	}
+
+	if (storeToggle) {
+		storeToggle.setAttribute("aria-expanded", state.isStoreEditorOpen ? "true" : "false");
+	}
+
+	if (storeEditor) {
+		storeEditor.classList.toggle("is-open", state.isStoreEditorOpen);
+		storeEditor.setAttribute("aria-hidden", state.isStoreEditorOpen ? "false" : "true");
+	}
+
+	if (storeChevron) {
+		storeChevron.classList.toggle("is-open", state.isStoreEditorOpen);
+	}
+
+	if (storeSelect) {
+		storeSelect.innerHTML = state.stores
+			.map((store) => {
+				const cityPart = store.city ? ` (${store.city})` : "";
+				return `<option value="${escapeHtml(store.id)}">${escapeHtml(store.name)}${escapeHtml(cityPart)}</option>`;
+			})
+			.join("");
+
+		if (state.selectedStoreId) {
+			storeSelect.value = String(state.selectedStoreId);
+		}
+	}
+
+	if (layoutSelect) {
+		const createLayoutOption = '<option value="__create_new_layout__">Skapa ny layout...</option>';
+		const layoutOptions = state.storeLayouts
+			.map((layout) => `<option value="${escapeHtml(layout.id)}">${escapeHtml(layout.name)}</option>`)
+			.join("");
+
+		layoutSelect.innerHTML = createLayoutOption + layoutOptions;
+		layoutSelect.value = state.selectedLayoutId ? String(state.selectedLayoutId) : "__create_new_layout__";
+	}
+
+	if (saveButton) {
+		saveButton.disabled = state.isStoreEditorSaving || !state.selectedStoreId;
+		saveButton.textContent = state.isStoreEditorSaving ? "Sparar..." : "Spara butik och layout";
+	}
+
+	if (status) {
+		status.textContent = state.storeEditorError;
 	}
 }
 
@@ -406,7 +494,12 @@ async function loadListPageData(listId) {
 
 		state.list = list;
 		state.items = list.items ?? [];
-		state.listTitleDraft = String(list.title ?? "Min Inkoplista");
+		state.selectedStoreId = String(list.store_id ?? list.store?.id ?? "");
+		state.selectedLayoutId = String(list.store_layout_id ?? list.layout?.id ?? "");
+		state.stores = await getStores();
+		state.storeLayouts = state.selectedStoreId
+			? await getStoreLayouts(state.selectedStoreId)
+			: [];
 		state.suggestions = await getSuggestedProducts(list, Array.from(state.dismissedSuggestionIds));
 	} catch (error) {
 		state.loadError = "Kunde inte ladda listan.";
@@ -414,6 +507,60 @@ async function loadListPageData(listId) {
 	} finally {
 		state.isLoading = false;
 		renderAll();
+	}
+}
+
+async function refreshStoreLayoutsForSelectedStore() {
+	if (!state.selectedStoreId) {
+		state.storeLayouts = [];
+		state.selectedLayoutId = "";
+		renderTitleAndStore();
+		return;
+	}
+
+	try {
+		state.storeLayouts = await getStoreLayouts(state.selectedStoreId);
+
+		const hasCurrentLayout = state.storeLayouts.some(
+			(layout) => String(layout.id) === String(state.selectedLayoutId),
+		);
+
+		if (!hasCurrentLayout) {
+			state.selectedLayoutId = "";
+		}
+	} catch (error) {
+		console.error("Load store layouts failed", error);
+		state.storeLayouts = [];
+		state.selectedLayoutId = "";
+	}
+
+	renderTitleAndStore();
+}
+
+async function handleStoreEditorSave() {
+	if (!state.listId || !state.selectedStoreId) {
+		return;
+	}
+
+	state.isStoreEditorSaving = true;
+	state.storeEditorError = "";
+	renderTitleAndStore();
+
+	try {
+		await updateShoppingListStoreAndLayout(state.listId, {
+			storeId: state.selectedStoreId,
+			layoutId: state.selectedLayoutId || null,
+		});
+
+		await loadListPageData(state.listId);
+		state.isStoreEditorOpen = false;
+		renderAll();
+	} catch (error) {
+		console.error("Update store/layout failed", error);
+		state.storeEditorError = "Kunde inte spara butik/layout. Forsok igen.";
+	} finally {
+		state.isStoreEditorSaving = false;
+		renderTitleAndStore();
 	}
 }
 
@@ -453,7 +600,7 @@ async function handleAddProductToList(productId) {
 	}
 
 	try {
-		await addItemToList(state.listId, productId);
+		await addShoppingListItem(state.listId, { productId });
 		await refreshItemsAndSuggestions();
 		state.searchQuery = "";
 		state.searchResults = [];
@@ -468,25 +615,28 @@ async function handleAddProductToList(productId) {
 	}
 }
 
-async function handleCustomItemSubmit(event) {
-	event.preventDefault();
-
-	const input = document.querySelector("#list-custom-item-input");
-
-	if (!input || !state.listId) {
+async function handleAddCustomItemToList(customName) {
+	if (!state.listId) {
 		return;
 	}
 
-	const customName = input.value.trim();
-	if (!customName) {
+	const trimmedCustomName = String(customName ?? "").trim();
+
+	if (!trimmedCustomName) {
 		return;
 	}
 
 	try {
-		await addCustomItem(state.listId, customName);
-		input.value = "";
+		await addShoppingListItem(state.listId, { customName: trimmedCustomName });
 		await refreshItemsAndSuggestions();
+		state.searchQuery = "";
+		state.searchResults = [];
 		renderAll();
+
+		const searchInput = document.querySelector("#list-product-search");
+		if (searchInput) {
+			searchInput.focus();
+		}
 	} catch (error) {
 		console.error("Add custom item failed", error);
 	}
@@ -555,37 +705,25 @@ function queueNoteAutosave(itemId, noteText) {
 	state.noteSaveTimers.set(String(itemId), timer);
 }
 
-function queueTitleAutosave() {
-	if (!state.listId) {
-		return;
-	}
-
-	if (state.titleDebounceTimer) {
-		clearTimeout(state.titleDebounceTimer);
-	}
-
-	state.titleDebounceTimer = setTimeout(async () => {
-		const trimmedTitle = state.listTitleDraft.trim() || "Min Inkoplista";
-
-		state.isSavingTitle = true;
-
-		try {
-			await updateShoppingListTitle(state.listId, trimmedTitle);
-
-			if (state.list) {
-				state.list.title = trimmedTitle;
-			}
-		} catch (error) {
-			console.error("Update title failed", error);
-		} finally {
-			state.isSavingTitle = false;
-		}
-	}, 300);
-}
-
 function extractListId(path) {
 	const match = /^\/list\/([^/]+)\/?$/.exec(path);
 	return match ? decodeURIComponent(match[1]) : null;
+}
+
+function navigateToLayoutEditorWithStorePrefill() {
+	const selectedStore = state.stores.find((store) => String(store.id) === String(state.selectedStoreId));
+
+	if (!selectedStore) {
+		navigateTo("/layout-editor");
+		return;
+	}
+
+	const query = new URLSearchParams({
+		storeName: String(selectedStore.name ?? ""),
+		city: String(selectedStore.city ?? ""),
+	});
+
+	navigateTo(`/layout-editor?${query.toString()}`);
 }
 
 function initShoppingListPage(path) {
@@ -625,16 +763,26 @@ function initShoppingListPage(path) {
 
 			const backButton = target.closest("#list-back-button");
 			if (backButton) {
-				if (window.history.length > 1) {
-					window.history.back();
-					return;
-				}
-
-				navigateTo("/create-list");
+				navigateTo("/");
 				return;
 			}
 
-			const addProductButton = target.closest("[data-add-product-id]");
+			const addOptionButton = target.closest("[data-add-option-type]");
+			if (addOptionButton) {
+				const { addOptionType, addProductId, addCustomName } = addOptionButton.dataset;
+
+				if (addOptionType === "product" && addProductId) {
+					await handleAddProductToList(addProductId);
+				}
+
+				if (addOptionType === "custom" && addCustomName) {
+					await handleAddCustomItemToList(addCustomName);
+				}
+
+				return;
+			}
+
+			const addProductButton = target.closest("[data-add-product-id]:not([data-add-option-type])");
 			if (addProductButton) {
 				const { addProductId } = addProductButton.dataset;
 				if (addProductId) {
@@ -678,6 +826,19 @@ function initShoppingListPage(path) {
 
 				renderGroups();
 			}
+
+			const storeLabelButton = target.closest("#list-store-toggle");
+			if (storeLabelButton) {
+				state.isStoreEditorOpen = !state.isStoreEditorOpen;
+				renderTitleAndStore();
+				return;
+			}
+
+			const storeSaveButton = target.closest("#list-store-save");
+			if (storeSaveButton) {
+				await handleStoreEditorSave();
+				return;
+			}
 		},
 		{ signal },
 	);
@@ -685,6 +846,29 @@ function initShoppingListPage(path) {
 	pageRoot.addEventListener(
 		"change",
 		async (event) => {
+			const target = event.target;
+
+			if (!(target instanceof Element)) {
+				return;
+			}
+
+			if (target.id === "list-store-select") {
+				state.selectedStoreId = target.value;
+				await refreshStoreLayoutsForSelectedStore();
+				return;
+			}
+
+			if (target.id === "list-layout-select") {
+				if (target.value === "__create_new_layout__") {
+					navigateToLayoutEditorWithStorePrefill();
+					return;
+				}
+
+				state.selectedLayoutId = target.value;
+				renderTitleAndStore();
+				return;
+			}
+
 			await handleCheckboxToggle(event);
 		},
 		{ signal },
@@ -705,12 +889,6 @@ function initShoppingListPage(path) {
 				return;
 			}
 
-			if (target.id === "list-title-input") {
-				state.listTitleDraft = target.value;
-				queueTitleAutosave();
-				return;
-			}
-
 			const noteInput = target.closest("[data-note-item-id]");
 			if (noteInput) {
 				const { noteItemId } = noteInput.dataset;
@@ -727,16 +905,32 @@ function initShoppingListPage(path) {
 	);
 
 	pageRoot.addEventListener(
-		"submit",
+		"keydown",
 		async (event) => {
 			const target = event.target;
 
-			if (!(target instanceof Element)) {
+			if (!(target instanceof HTMLInputElement) || target.id !== "list-product-search") {
 				return;
 			}
 
-			if (target.id === "list-custom-item-form") {
-				await handleCustomItemSubmit(event);
+			if (event.key !== "Enter") {
+				return;
+			}
+
+			event.preventDefault();
+
+			const normalizedQuery = state.searchQuery.trim().toLocaleLowerCase("sv");
+			const exactMatch = state.searchResults.find(
+				(product) => String(product.name ?? "").trim().toLocaleLowerCase("sv") === normalizedQuery,
+			);
+
+			if (exactMatch?.id) {
+				await handleAddProductToList(exactMatch.id);
+				return;
+			}
+
+			if (state.searchQuery.trim()) {
+				await handleAddCustomItemToList(state.searchQuery.trim());
 			}
 		},
 		{ signal },
@@ -754,42 +948,62 @@ export function renderShoppingListPage(path) {
 				<button
 					type="button"
 					id="list-back-button"
-					class="btn btn-secondary btn-small list-page__back-button"
+					class="list-page__back-button"
 					aria-label="Ga tillbaka"
 				>
-					<span aria-hidden="true">&larr;</span>
+					<i class="ti ti-chevron-left" aria-hidden="true"></i>
 				</button>
 
-				<input
-					id="list-title-input"
-					class="input-field list-page__title-input"
-					type="text"
-					value="Min Inkoplista"
-					aria-label="Redigera listtitel"
-				/>
-
-				<span class="list-page__title-hint">Redigera</span>
+				<h1 class="list-page__title">Min Inkoplista</h1>
+				<span class="list-page__header-spacer" aria-hidden="true"></span>
 			</header>
 
-			<div class="card list-page__store-card">
-				<button type="button" class="btn btn-secondary list-page__store-button" id="list-store-label" aria-label="Byt butik">
-					Byt butik: Okand butik
+			<div class="list-page__store-subheader-wrap">
+				<button
+					type="button"
+					id="list-store-toggle"
+					class="list-page__store-subheader"
+					aria-label="Byt butik"
+					aria-expanded="false"
+				>
+					<span id="list-store-label" class="list-page__store-subheader-text">
+						<span class="list-page__store-subheader-prefix">Byt butik:</span>
+						<span class="list-page__store-subheader-value">Okand butik</span>
+					</span>
+					<i id="list-store-chevron" class="ti ti-chevron-down list-page__store-subheader-chevron" aria-hidden="true"></i>
 				</button>
 			</div>
 
-			<section class="card list-page__search-card" aria-label="Produktsok">
+			<section id="list-store-editor" class="list-page__store-editor-panel" aria-hidden="true">
+				<div class="card list-page__store-editor-card">
+				<div class="list-page__store-editor">
+					<label for="list-store-select" class="list-page__label">Butik</label>
+					<select id="list-store-select" class="input-field list-page__store-select"></select>
+
+					<label for="list-layout-select" class="list-page__label">Layout</label>
+					<select id="list-layout-select" class="input-field list-page__store-select"></select>
+
+					<button type="button" id="list-store-save" class="btn btn-primary list-page__store-save">Spara butik och layout</button>
+					<p id="list-store-editor-status" class="list-page__status list-page__status--error" aria-live="polite"></p>
+				</div>
+				</div>
+			</section>
+
+			<section class="card list-page__search-card" aria-label="Lagg till vara">
 				<label for="list-product-search" class="list-page__label">Sok vara</label>
 				<input
 					id="list-product-search"
 					class="input-field list-page__search-input"
 					type="search"
-					placeholder="Sok vara..."
+					placeholder="Sok eller lagg till vara..."
 					autocomplete="off"
+					role="combobox"
+					aria-autocomplete="list"
+					aria-expanded="false"
+					aria-controls="list-product-search-results"
 				/>
-				<div id="list-product-search-results" class="list-page__search-results" hidden></div>
+				<div id="list-product-search-results" class="list-page__search-results" role="listbox" hidden></div>
 			</section>
-
-			<section id="list-suggestions-section" class="card list-page__suggestion-card" aria-label="Foreslag" hidden></section>
 
 			<section id="list-grouped-items" class="list-page__groups" aria-live="polite"></section>
 		</section>

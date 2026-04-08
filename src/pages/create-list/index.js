@@ -620,11 +620,11 @@ export function renderCreateListPage() {
 	return `
 		<section class="create-list create-list-page page-container" aria-label="Skapa inköpslista - välj butik">
 			<header class="create-list__nav create-list-header" role="banner">
-				<button type="button" id="create-list-back-button" class="btn btn-secondary btn-small create-list__back-button" aria-label="Gå tillbaka">
-					<span aria-hidden="true">&larr;</span>
+				<button type="button" id="create-list-back-button" class="create-list__back-button" aria-label="Gå tillbaka">
+					<i class="ti ti-chevron-left" aria-hidden="true"></i>
 				</button>
 				<h1 class="create-list__title">Välj butik</h1>
-				<p class="create-list__step">Steg 1 av 3</p>
+				<span class="create-list__header-spacer" aria-hidden="true"></span>
 			</header>
 
 			<div class="create-list__search create-list__search-card card create-list-section">

@@ -77,8 +77,7 @@ export async function loadStoreLayouts(storeId) {
   const { data, error } = await supabase
     .from("store_layouts")
     .select("*")
-    .eq("store_id", storeId)
-    .order("created_at", { ascending: false });
+    .eq("store_id", storeId);
 
   if (error) {
     throw error;
@@ -123,7 +122,11 @@ export async function createShoppingList({
   const basePayloads = [
     { store_id: storeId, store_layout_id: layoutId, title },
     { store_id: storeId, layout_id: layoutId, title },
+    { store_id: storeId, store_layout_id: layoutId, name: title },
+    { store_id: storeId, layout_id: layoutId, name: title },
     { store_id: storeId, title },
+    { store_id: storeId, name: title },
+    { store_id: storeId },
   ];
 
   const payloadCandidates = basePayloads.flatMap((payload) => {

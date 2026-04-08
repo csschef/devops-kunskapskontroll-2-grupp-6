@@ -186,17 +186,8 @@ export async function getShoppingList(listId) {
     layout = layoutData ?? null;
   }
 
-  let categoryOrder = [];
-  if (list.store_id) {
-    const { data: orderRows, error: orderError } = await supabase
-      .from("store_category_order")
-      .select("*")
-      .eq("store_id", list.store_id);
-
-    if (!orderError) {
-      categoryOrder = normalizeCategoryOrder(orderRows);
-    }
-  }
+  // This table/column is optional across environments; skip hard dependency.
+  const categoryOrder = [];
 
   const items = await getShoppingListItems(listId);
 
@@ -229,14 +220,7 @@ export async function searchProducts(searchQuery) {
   return data ?? [];
 }
 
-export async function addItemToList(listId, productId) {
-  const trimmedListId = String(listId).trim();
-
-  const payloadVariants = [
-    { shopping_list_id: trimmedListId, product_id: productId, is_checked: false },
-    { list_id: trimmedListId, product_id: productId, is_checked: false },
-  ];
-
+async function insertShoppingListItem(payloadVariants) {
   let lastError = null;
 
   for (const payload of payloadVariants) {
@@ -256,6 +240,36 @@ export async function addItemToList(listId, productId) {
   throw lastError;
 }
 
+export async function addShoppingListItem(listId, { productId = null, customName = null } = {}) {
+  const trimmedListId = String(listId).trim();
+  const cleanedCustomName = customName === null ? null : String(customName).trim();
+
+  if (!trimmedListId) {
+    throw new Error("List id is required.");
+  }
+
+  if (!productId && !cleanedCustomName) {
+    throw new Error("Either productId or customName is required.");
+  }
+
+  const basePayload = {
+    product_id: productId ?? null,
+    custom_name: productId ? null : cleanedCustomName,
+    is_checked: false,
+  };
+
+  const payloadVariants = [
+    { shopping_list_id: trimmedListId, ...basePayload },
+    { list_id: trimmedListId, ...basePayload },
+  ];
+
+  return insertShoppingListItem(payloadVariants);
+}
+
+export async function addItemToList(listId, productId) {
+  return addShoppingListItem(listId, { productId });
+}
+
 export async function addCustomItem(listId, name) {
   const cleanedName = name.trim();
 
@@ -263,28 +277,7 @@ export async function addCustomItem(listId, name) {
     throw new Error("Item name is required.");
   }
 
-  const payloadVariants = [
-    { shopping_list_id: String(listId).trim(), custom_name: cleanedName, is_checked: false },
-    { list_id: String(listId).trim(), custom_name: cleanedName, is_checked: false },
-  ];
-
-  let lastError = null;
-
-  for (const payload of payloadVariants) {
-    const { data, error } = await supabase
-      .from("shopping_list_items")
-      .insert(payload)
-      .select("*")
-      .single();
-
-    if (!error) {
-      return data;
-    }
-
-    lastError = error;
-  }
-
-  throw lastError;
+  return addShoppingListItem(listId, { customName: cleanedName });
 }
 
 export async function toggleItemChecked(itemId, checked) {
@@ -442,4 +435,66 @@ export async function getSuggestedProducts(list, dismissedProductIds = []) {
       };
     })
     .filter(Boolean);
+}
+
+export async function getStores() {
+  const { data, error } = await supabase
+    .from("stores")
+    .select("id, name, city")
+    .order("name", { ascending: true })
+    .limit(200);
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function getStoreLayouts(storeId) {
+  if (!storeId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("store_layouts")
+    .select("*")
+    .eq("store_id", storeId);
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function updateShoppingListStoreAndLayout(listId, { storeId, layoutId = null } = {}) {
+  const trimmedListId = String(listId ?? "").trim();
+
+  if (!trimmedListId || !storeId) {
+    throw new Error("List id and store id are required.");
+  }
+
+  const payloads = [
+    { store_id: storeId, store_layout_id: layoutId },
+    { store_id: storeId, layout_id: layoutId },
+    { store_id: storeId },
+  ];
+
+  let lastError = null;
+
+  for (const payload of payloads) {
+    const { error } = await supabase
+      .from("shopping_lists")
+      .update(payload)
+      .eq("id", trimmedListId);
+
+    if (!error) {
+      return;
+    }
+
+    lastError = error;
+  }
+
+  throw lastError;
 }
