@@ -11,6 +11,9 @@ const TOUCH_AUTO_SCROLL_INTERVAL_MS = 16;
 const FULL_CARD_DRAG_MIN_WIDTH = 1920;
 let touchDraggedCard = null;
 let mouseDraggedCard = null;
+let mouseDragProxy = null;
+let mouseDragProxyOffsetX = 0;
+let mouseDragProxyOffsetY = 0;
 let currentDropMarkerElement = null;
 let pendingDropTargetList = null;
 let pendingDropTargetCard = null;
@@ -18,6 +21,8 @@ let touchClientX = 0;
 let touchClientY = 0;
 let touchAutoScrollIntervalId = null;
 let currentTouchAutoScrollStep = 0;
+let mouseAutoScrollIntervalId = null;
+let currentMouseAutoScrollStep = 0;
 let pageLifecycleAbortController = null;
 let activeListMutationObserver = null;
 let saveActionIsPending = false;
@@ -371,65 +376,98 @@ function updateDropTargetState(list, targetCard, draggedCard) {
 	setPendingDropTarget(list, targetCard);
 }
 
-// Startar mus-drag och initierar drag-state.
-function handleCardDragStart(event) {
+// Startar mus-drag med custom mousedown-logik för full kontroll över visuell feedback.
+function handleCardMouseDown(event) {
 	const card = event.target.closest(DND_CARD_SELECTOR);
 	if (!isDraggableCard(card)) return;
-	if (!isWholeCardMouseDragEnabled() && !isDragHandleTarget(event.target)) {
-		event.preventDefault();
-		return;
-	}
+	if (!isWholeCardMouseDragEnabled() && !isDragHandleTarget(event.target)) return;
 
+	event.preventDefault();
 	mouseDraggedCard = card;
 	card.classList.add("is-dragging");
 	clearDropMarker();
 	clearPendingDropTarget();
 
-	event.dataTransfer.effectAllowed = "move";
-	event.dataTransfer.setData("text/plain", card.dataset.sectionName || "");
-}
+	// Bygg proxy-element för visuell feedback under drag (gäller alla drag-scenarion)
+	mouseDragProxy = document.createElement("li");
+	mouseDragProxy.className = "layout-editor-section-card is-hovering-to-active";
+	const icon = card.querySelector(".layout-editor-category-icon");
+	const label = card.querySelector(".layout-editor-category-name");
+	const dragHandle = card.querySelector(".layout-editor-drag-handle");
+	if (icon) mouseDragProxy.appendChild(icon.cloneNode(true));
+	if (label) mouseDragProxy.appendChild(label.cloneNode(true));
+	if (dragHandle) mouseDragProxy.appendChild(dragHandle.cloneNode(true));
 
-// Avslutar mus-drag och städar drag-state.
-function handleCardDragEnd(event) {
-	const card = event.target.closest(DND_CARD_SELECTOR);
-	if (!card) return;
-	card.classList.remove("is-dragging");
-	mouseDraggedCard = null;
-	clearDropMarker();
-	clearPendingDropTarget();
-}
+	const cardRect = card.getBoundingClientRect();
+	mouseDragProxy.style.width = cardRect.width + "px";
 
-// Hanterar drag-over för mus och uppdaterar aktuell drop-position.
-function handleListDragOver(event) {
-	const list = event.currentTarget;
-	const draggedCard = mouseDraggedCard;
-
-	if (!isDraggableCard(draggedCard)) return;
-	if (isInactiveList(list) && draggedCard.parentElement === list) return;
-
-	event.preventDefault();
-	const targetCard = isInactiveList(list) ? null : getDropTargetCard(list, event.clientY, draggedCard);
-	updateDropTargetState(list, targetCard, draggedCard);
-}
-
-// Hanterar släpp med mus och committar vald position.
-function handleListDrop(event) {
-	const list = event.currentTarget;
-	const draggedCard = mouseDraggedCard;
-
-	if (!isDraggableCard(draggedCard)) return;
-
-	event.preventDefault();
-
-	// Använd den senast beräknade drop-target från dragover när den finns,
-	// eftersom drop-eventets koordinater kan vara opålitliga i vissa desktop-lägen.
-	if (pendingDropTargetList !== list) {
-		const targetCard = isInactiveList(list) ? null : getDropTargetCard(list, event.clientY, draggedCard);
-		updateDropTargetState(list, targetCard, draggedCard);
+	if (dragHandle) {
+		const handleRect = dragHandle.getBoundingClientRect();
+		mouseDragProxyOffsetX = (handleRect.left + handleRect.width / 2) - cardRect.left;
+		mouseDragProxyOffsetY = (handleRect.top + handleRect.height / 2) - cardRect.top;
+	} else {
+		mouseDragProxyOffsetX = cardRect.width - 24;
+		mouseDragProxyOffsetY = cardRect.height / 2;
 	}
 
-	commitPendingDrop(draggedCard);
+	mouseDragProxy.style.left = (event.clientX - mouseDragProxyOffsetX) + "px";
+	mouseDragProxy.style.top = (event.clientY - mouseDragProxyOffsetY) + "px";
+	document.body.appendChild(mouseDragProxy);
+}
+
+// Hanterar rörelser under mus-drag och uppdaterar proxy-position samt drop-mål.
+function handleDocumentMouseMove(event) {
+	if (!isDraggableCard(mouseDraggedCard)) return;
+
+	if (mouseDragProxy) {
+		mouseDragProxy.style.left = (event.clientX - mouseDragProxyOffsetX) + "px";
+		mouseDragProxy.style.top = (event.clientY - mouseDragProxyOffsetY) + "px";
+	}
+
+	currentMouseAutoScrollStep = getMouseAutoScrollDelta(event.clientY);
+	startMouseAutoScroll();
+
+	const targetList = getListFromPoint(event.clientX, event.clientY);
+	if (!targetList) return;
+	if (isInactiveList(targetList) && mouseDraggedCard.parentElement === targetList) return;
+
+	const targetCard = isInactiveList(targetList) ? null : getDropTargetCard(targetList, event.clientY, mouseDraggedCard);
+	updateDropTargetState(targetList, targetCard, mouseDraggedCard);
+}
+
+// Avslutar mus-drag och committar vald position om släpp sker i giltig lista.
+function handleDocumentMouseUp(event) {
+	if (!isDraggableCard(mouseDraggedCard)) {
+		endMouseDragging();
+		return;
+	}
+
+	const targetList = getListFromPoint(event.clientX, event.clientY);
+	if (targetList && !(isInactiveList(targetList) && mouseDraggedCard.parentElement === targetList)) {
+		const targetCard = isInactiveList(targetList) ? null : getDropTargetCard(targetList, event.clientY, mouseDraggedCard);
+		updateDropTargetState(targetList, targetCard, mouseDraggedCard);
+	}
+
+	commitPendingDrop(mouseDraggedCard);
 	syncSaveButtonState();
+	endMouseDragging();
+}
+
+// Städar upp efter mus-drag och återställer state.
+function endMouseDragging() {
+	if (mouseDraggedCard) {
+		mouseDraggedCard.classList.remove("is-dragging");
+		mouseDraggedCard = null;
+	}
+
+	if (mouseDragProxy) {
+		mouseDragProxy.remove();
+		mouseDragProxy = null;
+	}
+
+	stopMouseAutoScroll();
+	clearDropMarker();
+	clearPendingDropTarget();
 }
 
 // Returnerar den lista som ligger under given skärmposition.
@@ -468,15 +506,20 @@ function getTouchAutoScrollDelta(pointerY) {
 		return direction * Math.round(step);
 	};
 
+	// Om vi drar från inaktiv-listan, tillåt endast scroll uppåt
+	const isDraggingFromInactive = touchDraggedCard && isInactiveList(touchDraggedCard.parentElement);
+
 	if (pointerY < TOUCH_AUTO_SCROLL_EDGE_PX) {
 		const intensity = (TOUCH_AUTO_SCROLL_EDGE_PX - pointerY) / TOUCH_AUTO_SCROLL_EDGE_PX;
 		return scaleDelta(intensity, -1);
 	}
 
-	const bottomEdgeStart = window.innerHeight - TOUCH_AUTO_SCROLL_EDGE_PX;
-	if (pointerY > bottomEdgeStart) {
-		const intensity = (pointerY - bottomEdgeStart) / TOUCH_AUTO_SCROLL_EDGE_PX;
-		return scaleDelta(intensity, 1);
+	if (!isDraggingFromInactive) {
+		const bottomEdgeStart = window.innerHeight - TOUCH_AUTO_SCROLL_EDGE_PX;
+		if (pointerY > bottomEdgeStart) {
+			const intensity = (pointerY - bottomEdgeStart) / TOUCH_AUTO_SCROLL_EDGE_PX;
+			return scaleDelta(intensity, 1);
+		}
 	}
 
 	return 0;
@@ -523,6 +566,53 @@ function startTouchAutoScroll() {
 	touchAutoScrollIntervalId = setInterval(runTouchAutoScrollTick, TOUCH_AUTO_SCROLL_INTERVAL_MS);
 }
 
+// Beräknar auto-scroll-hastighet för mus-drag (båda riktningar tillåtna).
+function getMouseAutoScrollDelta(pointerY) {
+	const scaleDelta = (intensity, direction) => {
+		const clampedIntensity = Math.min(Math.max(intensity, 0), 1);
+		const step = (TOUCH_AUTO_SCROLL_MIN_STEP + (TOUCH_AUTO_SCROLL_MAX_STEP - TOUCH_AUTO_SCROLL_MIN_STEP) * clampedIntensity) * TOUCH_AUTO_SCROLL_SPEED_MULTIPLIER;
+		return direction * Math.round(step);
+	};
+
+	if (pointerY < TOUCH_AUTO_SCROLL_EDGE_PX) {
+		const intensity = (TOUCH_AUTO_SCROLL_EDGE_PX - pointerY) / TOUCH_AUTO_SCROLL_EDGE_PX;
+		return scaleDelta(intensity, -1);
+	}
+
+	const bottomEdgeStart = window.innerHeight - TOUCH_AUTO_SCROLL_EDGE_PX;
+	if (pointerY > bottomEdgeStart) {
+		const intensity = (pointerY - bottomEdgeStart) / TOUCH_AUTO_SCROLL_EDGE_PX;
+		return scaleDelta(intensity, 1);
+	}
+
+	return 0;
+}
+
+// Stoppar aktiv auto-scroll-loop för mus-drag.
+function stopMouseAutoScroll() {
+	if (mouseAutoScrollIntervalId) {
+		clearInterval(mouseAutoScrollIntervalId);
+		mouseAutoScrollIntervalId = null;
+	}
+	currentMouseAutoScrollStep = 0;
+}
+
+// Kör auto-scroll-tick under mus-drag.
+function runMouseAutoScrollTick() {
+	if (!isDraggableCard(mouseDraggedCard)) {
+		stopMouseAutoScroll();
+		return;
+	}
+	if (currentMouseAutoScrollStep === 0) return;
+	applyInstantPageScroll(currentMouseAutoScrollStep);
+}
+
+// Startar auto-scroll-loop för mus-drag om den inte redan kör.
+function startMouseAutoScroll() {
+	if (mouseAutoScrollIntervalId) return;
+	mouseAutoScrollIntervalId = setInterval(runMouseAutoScrollTick, TOUCH_AUTO_SCROLL_INTERVAL_MS);
+}
+
 // Initierar touch-drag när användaren börjar dra ett kort.
 function handleListTouchStart(event) {
 	if (!isDragHandleTarget(event.target)) return;
@@ -530,20 +620,22 @@ function handleListTouchStart(event) {
 	const card = event.target.closest(DND_CARD_SELECTOR);
 	if (!isDraggableCard(card)) return;
 	event.preventDefault();
-	const touch = event.touches?.[0];
-	if (touch) {
-		touchClientX = touch.clientX;
-		touchClientY = touch.clientY;
-		currentTouchAutoScrollStep = getTouchAutoScrollDelta(touchClientY);
-	}
 
+	// Sätt touchDraggedCard först så att getTouchAutoScrollDelta kan identifiera källistan korrekt.
 	touchDraggedCard = card;
 	touchDraggedCard.classList.add("is-dragging");
 	setTouchDragScrollLock(true);
 	clearDropMarker();
 	clearPendingDropTarget();
 
-	startTouchAutoScroll();
+	const touch = event.touches?.[0];
+	if (touch) {
+		touchClientX = touch.clientX;
+		touchClientY = touch.clientY;
+	}
+
+	// Starta INTE auto-scroll här – den aktiveras först när fingret rör sig (touchmove).
+	// Det förhindrar att sidan scrollar aggressivt direkt vid beröring nära skärmkanten.
 }
 
 // Hanterar touch-rörelse under drag och uppdaterar målposition.
@@ -558,6 +650,23 @@ function handleDocumentTouchMove(event) {
 	currentTouchAutoScrollStep = getTouchAutoScrollDelta(touchClientY);
 	updateTouchDropTarget(touchClientX, touchClientY);
 	startTouchAutoScroll();
+
+	// Visa det flytande proxy-kortet för alla drag-scenarion (oavsett källlista)
+	touchDraggedCard.classList.add("is-hovering-to-active");
+	const dragHandle = touchDraggedCard.querySelector(".layout-editor-drag-handle");
+	let offsetX = 0;
+	let offsetY = 0;
+	if (dragHandle) {
+		const cardRect = touchDraggedCard.getBoundingClientRect();
+		const handleRect = dragHandle.getBoundingClientRect();
+		offsetX = (handleRect.left + handleRect.width / 2) - cardRect.left;
+		offsetY = (handleRect.top + handleRect.height / 2) - cardRect.top;
+	} else {
+		offsetX = touchDraggedCard.offsetWidth - 24;
+		offsetY = touchDraggedCard.offsetHeight / 2;
+	}
+	touchDraggedCard.style.left = (touchClientX - offsetX) + "px";
+	touchDraggedCard.style.top = (touchClientY - offsetY) + "px";
 }
 
 // Avslutar touch-drag och återställer temporär state.
@@ -565,7 +674,9 @@ function endTouchDragging() {
 	if (!touchDraggedCard) return;
 	commitPendingDrop(touchDraggedCard);
 	syncSaveButtonState();
-	touchDraggedCard.classList.remove("is-dragging");
+	touchDraggedCard.classList.remove("is-dragging", "is-hovering-to-active");
+	touchDraggedCard.style.left = "";
+	touchDraggedCard.style.top = "";
 	touchDraggedCard = null;
 	touchClientX = 0;
 	touchClientY = 0;
@@ -599,24 +710,28 @@ function setupTouchDragAndDrop() {
 	document.addEventListener("touchcancel", endTouchDragging, { signal: pageLifecycleAbortController.signal });
 }
 
-// Binder mus-baserad drag-and-drop till en lista en gång.
-function bindDragAndDropToList(list) {
-	if (!list || list.dataset.dndBound === "true") return;
+// Binder mus-baserad drag-and-drop till en lista en gång (mousedown-baserat system).
+function bindMouseDragAndDropToList(list) {
+	if (!list || list.dataset.mouseDndBound === "true") return;
 
-	list.dataset.dndBound = "true";
-	list.addEventListener("dragstart", handleCardDragStart);
-	list.addEventListener("dragend", handleCardDragEnd);
-	list.addEventListener("dragover", handleListDragOver);
-	list.addEventListener("drop", handleListDrop);
+	list.dataset.mouseDndBound = "true";
+	list.addEventListener("mousedown", handleCardMouseDown);
+	// Förhindra webbläsarens inbyggda HTML5-drag som skulle störa custom-systemet
+	list.addEventListener("dragstart", (e) => e.preventDefault());
 }
 
 // Sätter upp all mus-baserad drag-and-drop för sidan.
-function setupDragAndDrop() {
+function setupMouseDragAndDrop() {
 	const activeList = document.querySelector("#layout-editor-active-list");
 	const inactiveList = document.querySelector("#layout-editor-inactive-list");
 
-	bindDragAndDropToList(activeList);
-	bindDragAndDropToList(inactiveList);
+	bindMouseDragAndDropToList(activeList);
+	bindMouseDragAndDropToList(inactiveList);
+
+	if (!pageLifecycleAbortController) return;
+
+	document.addEventListener("mousemove", handleDocumentMouseMove, { signal: pageLifecycleAbortController.signal });
+	document.addEventListener("mouseup", handleDocumentMouseUp, { signal: pageLifecycleAbortController.signal });
 }
 
 // Skapar ett kategorikort med DOM-API för att undvika HTML-injektion.
@@ -643,7 +758,6 @@ function createCategoryCardElement(slug) {
 	dragHandle.className = "layout-editor-drag-handle";
 	dragHandle.setAttribute("aria-label", "Dra för att flytta sektionen");
 	dragHandle.setAttribute("title", "Dra för att flytta sektionen");
-	dragHandle.setAttribute("draggable", "true");
 
 	card.append(icon, label, dragHandle);
 
@@ -1175,6 +1289,7 @@ function teardownLayoutEditorPage() {
 	}
 
 	stopTouchAutoScroll();
+	stopMouseAutoScroll();
 	clearDropMarker();
 	clearPendingDropTarget();
 	setTouchDragScrollLock(false);
@@ -1183,8 +1298,15 @@ function teardownLayoutEditorPage() {
 		mouseDraggedCard.classList.remove("is-dragging");
 	}
 
+	if (mouseDragProxy) {
+		mouseDragProxy.remove();
+		mouseDragProxy = null;
+	}
+
 	if (touchDraggedCard) {
-		touchDraggedCard.classList.remove("is-dragging");
+		touchDraggedCard.classList.remove("is-dragging", "is-hovering-to-active");
+		touchDraggedCard.style.left = "";
+		touchDraggedCard.style.top = "";
 	}
 
 	mouseDraggedCard = null;
@@ -1208,7 +1330,7 @@ export function setupLayoutEditorPage() {
 
 	syncInstructionsByViewport();
 	bindInstructionsViewportSync();
-	setupDragAndDrop();
+	setupMouseDragAndDrop();
 	setupTouchDragAndDrop();
 	bindSaveEligibilitySync();
 	bindExistingLayoutConflictControls(initialState);

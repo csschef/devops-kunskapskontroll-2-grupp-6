@@ -16,7 +16,7 @@ export function renderLayoutEditorPage() {
 				<section id="layout-editor-brand-panel">
 					<div id="layout-editor-heading-group">
 						<span class="auth-logo layout-editor-logo" role="img" aria-label="AISLE logo" style="--auth-logo-src: url('${aisleLogo}')"></span>
-						<h1>Skapa din butikslayout</h1>
+						<h1>Skapa <span style="color: var(--color-primary-500)">din</span> butikslayout</h1>
 					</div>
 					<p>Lägg till gångordningen för din butik genom att dra sektioner i rätt ordning.</p>
 
