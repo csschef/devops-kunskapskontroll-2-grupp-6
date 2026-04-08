@@ -53,6 +53,7 @@ const state = {
 	toggleRequestVersionByItemId: new Map(),
 	suggestionsRefreshTimer: null,
 	productSearchRequestVersion: 0,
+	isSuggestionsCollapsed: false,
 };
 
 const MAX_VISIBLE_SEARCH_RESULTS = 6;
@@ -74,6 +75,7 @@ function resetTransientState() {
 	state.isSearchingProducts = false;
 	state.expandedNotesItemId = null;
 	state.noteDraftByItemId = new Map();
+	state.isSuggestionsCollapsed = false;
 
 	if (state.searchDebounceTimer) {
 		clearTimeout(state.searchDebounceTimer);
@@ -295,7 +297,7 @@ function buildSearchOptions() {
 			? [{
 				id: "custom-option",
 				type: "custom",
-				label: `Lagg till \"${trimmedQuery}\" som Okategoriserat`,
+				label: `Lägg till \"${trimmedQuery}\" som Okategoriserat`,
 				customName: trimmedQuery,
 			}]
 			: []),
@@ -357,7 +359,7 @@ function renderProductSearchResults() {
 		if (searchCard) {
 			searchCard.classList.add("list-page__search-card--results-open");
 		}
-		container.innerHTML = '<p class="list-page__search-results-status">Soker produkter...</p>';
+		container.innerHTML = '<p class="list-page__search-results-status">Söker produkter...</p>';
 		return;
 	}
 
@@ -431,8 +433,9 @@ function renderSuggestions() {
 	const suggestions = state.suggestions.filter(
 		(product) => !state.dismissedSuggestionIds.has(String(product.id)),
 	);
+	const visibleSuggestions = suggestions.slice(0, 5);
 
-	if (suggestions.length === 0) {
+	if (visibleSuggestions.length === 0) {
 		section.hidden = true;
 		section.innerHTML = "";
 		return;
@@ -440,17 +443,26 @@ function renderSuggestions() {
 
 	section.hidden = false;
 	section.innerHTML = `
-		<h2 class="list-page__section-title">Forslag</h2>
-		<div class="list-page__suggestions" role="list">
-			${suggestions
+		<button
+			type="button"
+			class="list-page__prediction-header"
+			data-toggle-suggestions="true"
+			aria-expanded="${state.isSuggestionsCollapsed ? "false" : "true"}"
+		>
+			<span class="list-page__prediction-title">Vanliga varor</span>
+			<i class="ti ti-chevron-down list-page__prediction-chevron ${state.isSuggestionsCollapsed ? "is-collapsed" : ""}" aria-hidden="true"></i>
+		</button>
+		<div class="list-page__suggestions ${state.isSuggestionsCollapsed ? "is-collapsed" : ""}" ${state.isSuggestionsCollapsed ? "hidden" : ""}>
+			<ul class="list-page__items list-page__suggestion-items" role="list">
+				${visibleSuggestions
 		.map(
 			(product) => `
-					<div class="list-page__suggestion-pill" role="listitem">
+					<li class="list-page__suggestion-row" role="listitem">
 						<button
 							type="button"
 							class="list-page__suggestion-add"
 							data-add-product-id="${escapeHtml(product.id)}"
-							aria-label="Lagg till ${escapeHtml(product.name)}"
+							aria-label="Lägg till ${escapeHtml(product.name)}"
 						>
 							${escapeHtml(product.name)}
 						</button>
@@ -458,14 +470,15 @@ function renderSuggestions() {
 							type="button"
 							class="list-page__suggestion-dismiss"
 							data-dismiss-suggestion-id="${escapeHtml(product.id)}"
-							aria-label="Dolj forslag ${escapeHtml(product.name)}"
+							aria-label="Dölj förslag ${escapeHtml(product.name)}"
 						>
-							x
+							<i class="ti ti-x" aria-hidden="true"></i>
 						</button>
-					</div>
+					</li>
 				`,
 		)
 		.join("")}
+			</ul>
 		</div>
 	`;
 }
@@ -530,7 +543,7 @@ function renderItemRow(item) {
 						class="textarea-field list-page__note-input"
 						data-note-item-id="${escapeHtml(item.id)}"
 						rows="2"
-						placeholder="Lagg till en anteckning..."
+						placeholder="Lägg till en anteckning..."
 					>${noteText}</textarea>
 				</div>
 			` : ""}
@@ -586,7 +599,7 @@ function renderGroups() {
 
 	const completedMarkup = completedItems.length > 0
 		? `
-			<section class="list-page__group list-page__group--completed" aria-label="Fardiga varor">
+			<section class="list-page__group list-page__group--completed" aria-label="Färdiga varor">
 				<h2 class="list-page__section-title"><span>Klara varor</span></h2>
 				<ul class="list-page__items">
 					${completedItems.map((item) => renderItemRow(item)).join("")}
@@ -599,7 +612,12 @@ function renderGroups() {
 }
 
 function renderTitleAndStore() {
+	const titleLabel = document.querySelector("#list-title");
 	const storeToggle = document.querySelector("#list-store-toggle");
+	if (titleLabel) {
+		titleLabel.textContent = String(state.list?.title || "Min Inköpslista");
+	}
+
 	const storeLabel = document.querySelector("#list-store-label");
 	const storeEditor = document.querySelector("#list-store-editor");
 	const storeOverlay = document.querySelector("#list-store-overlay");
@@ -611,7 +629,7 @@ function renderTitleAndStore() {
 	const storeChevron = document.querySelector("#list-store-chevron");
 
 	if (storeLabel) {
-		const storeName = state.list?.store?.name || "Okand butik";
+		const storeName = state.list?.store?.name || "Okänd butik";
 		const rawLayoutName = String(state.list?.layout?.name ?? "").trim();
 		const isDuplicateLayoutName = rawLayoutName
 			&& rawLayoutName.toLocaleLowerCase("sv") === String(storeName).trim().toLocaleLowerCase("sv");
@@ -701,7 +719,7 @@ function renderTitleAndStore() {
 						>
 							${state.isCreatingStoreLoading ? "Skapar..." : "Skapa butik"}
 						</button>
-						<button
+							<button
 							type="button"
 							class="btn btn-secondary"
 							id="list-cancel-create-store"
@@ -726,9 +744,9 @@ function renderTitleAndStore() {
 					type="text"
 					id="list-store-search"
 					class="list-page__store-search"
-					placeholder="Sok i butiker..."
+					placeholder="Sök i butiker..."
 					value="${escapeHtml(state.storeQuery)}"
-					aria-label="Sok i ${state.storeResults.length} butiker"
+					aria-label="Sök i ${state.storeResults.length} butiker"
 				/>
 			`;
 
@@ -825,11 +843,18 @@ async function refreshItemsAndSuggestions() {
 
 	const [items, suggestions] = await Promise.all([
 		getShoppingListItems(state.listId),
-		getSuggestedProducts(state.list, Array.from(state.dismissedSuggestionIds)),
+		getSuggestedProducts(
+			{ ...(state.list ?? {}), items: state.items },
+			Array.from(state.dismissedSuggestionIds),
+		),
 	]);
 
 	state.items = items;
+	state.list = { ...(state.list ?? {}), items };
 	state.suggestions = suggestions;
+	state.suggestions = state.suggestions.filter(
+		(product) => !items.some((item) => String(item.product_id) === String(product.id)),
+	);
 }
 
 function queueSuggestionsRefresh() {
@@ -986,7 +1011,7 @@ async function handleStoreEditorSave() {
 		renderAll();
 	} catch (error) {
 		console.error("Update store/layout failed", error);
-		state.storeEditorError = "Kunde inte spara butik/layout. Forsok igen.";
+		state.storeEditorError = "Kunde inte spara butik/layout. Försök igen.";
 	} finally {
 		state.isStoreEditorSaving = false;
 		renderTitleAndStore();
@@ -1321,6 +1346,13 @@ function initShoppingListPage(path) {
 				return;
 			}
 
+			const toggleSuggestionsButton = target.closest("[data-toggle-suggestions]");
+			if (toggleSuggestionsButton) {
+				state.isSuggestionsCollapsed = !state.isSuggestionsCollapsed;
+				renderSuggestions();
+				return;
+			}
+
 			const deleteButton = target.closest("[data-delete-item-id]");
 			if (deleteButton) {
 				const { deleteItemId } = deleteButton.dataset;
@@ -1652,18 +1684,18 @@ export function renderShoppingListPage(path) {
 	});
 
 	return `
-		<section class="list-page page-container" aria-label="Min Inkoplista">
+		<section class="list-page page-container" aria-label="Min Inköpslista">
 			<header class="list-page__header" role="banner">
 				<button
 					type="button"
 					id="list-back-button"
 					class="list-page__back-button"
-					aria-label="Ga tillbaka"
+					aria-label="Gå tillbaka"
 				>
 					<i class="ti ti-chevron-left" aria-hidden="true"></i>
 				</button>
 
-				<h1 class="list-page__title">Min Inkoplista</h1>
+				<h1 id="list-title" class="list-page__title">Min Inköpslista</h1>
 				<span class="list-page__header-spacer" aria-hidden="true"></span>
 			</header>
 
@@ -1677,7 +1709,7 @@ export function renderShoppingListPage(path) {
 				>
 					<span id="list-store-label" class="list-page__store-subheader-text">
 						<span class="list-page__store-subheader-prefix">Byt butik:</span>
-						<span class="list-page__store-subheader-value">Okand butik</span>
+						<span class="list-page__store-subheader-value">Okänd butik</span>
 					</span>
 					<i id="list-store-chevron" class="ti ti-chevron-down list-page__store-subheader-chevron" aria-hidden="true"></i>
 				</button>
@@ -1688,13 +1720,13 @@ export function renderShoppingListPage(path) {
 					<div class="list-page__store-editor">
 						<div class="list-page__store-step">
 							<label for="list-store-city-input" class="list-page__step-label">Stad</label>
-							<input id="list-store-city-input" class="input-field list-page__store-input" type="text" placeholder="Sok stad..." autocomplete="off" />
+							<input id="list-store-city-input" class="input-field list-page__store-input" type="text" placeholder="Sök stad..." autocomplete="off" />
 							<div id="list-store-city-results" class="list-page__city-results" hidden role="listbox" aria-label="Stadlista"></div>
 						</div>
 
 						<div class="list-page__store-step">
 							<p class="list-page__step-label">Butik</p>
-							<div id="list-store-options" class="list-page__store-options" role="listbox" aria-label="Valj butik"></div>
+							<div id="list-store-options" class="list-page__store-options" role="listbox" aria-label="Välj butik"></div>
 						</div>
 
 						<div class="list-page__store-step">
@@ -1715,17 +1747,17 @@ export function renderShoppingListPage(path) {
 				type="button"
 				id="list-store-overlay"
 				class="list-page__store-overlay"
-				aria-label="Stang byt butik"
+				aria-label="Stäng byt butik"
 				aria-hidden="true"
 			></button>
 
-			<section class="list-page__search-card" aria-label="Lagg till vara">
-				<label for="list-product-search" class="list-page__label">Sok vara</label>
+			<section class="list-page__search-card" aria-label="Lägg till vara">
+				<label for="list-product-search" class="list-page__label">Sök vara</label>
 				<input
 					id="list-product-search"
 					class="input-field list-page__search-input"
 					type="search"
-					placeholder="Sok eller lagg till vara..."
+					placeholder="Sök eller lägg till vara..."
 					autocomplete="off"
 					role="combobox"
 					aria-autocomplete="list"
@@ -1734,6 +1766,8 @@ export function renderShoppingListPage(path) {
 				/>
 				<div id="list-product-search-results" class="list-page__search-results" role="listbox" hidden></div>
 			</section>
+
+			<section id="list-suggestions-section" class="list-page__suggestion-card" aria-label="Vanliga varor" hidden></section>
 
 			<section id="list-grouped-items" class="list-page__groups" aria-live="polite"></section>
 		</section>

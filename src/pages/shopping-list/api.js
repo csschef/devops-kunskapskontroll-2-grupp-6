@@ -277,10 +277,98 @@ function normalizeCategoryOrder(categoryOrderRows) {
     ...row,
     category_id: getFirstTruthyValue(row, ["category_id", "categoryId"]),
     order_index: Number(
-      getFirstTruthyValue(row, ["order_index", "sort_order", "position", "rank", "order"])
+      getFirstTruthyValue(row, ["display_order", "order_index", "sort_order", "position", "rank", "order"])
         ?? Number.MAX_SAFE_INTEGER,
     ),
   }));
+}
+
+function normalizeShoppingListStoreId(listRecord) {
+  return getFirstTruthyValue(listRecord, ["store_id", "storeId"]);
+}
+
+async function getShoppingListStoreId(listId) {
+  const { data, error } = await supabase
+    .from("shopping_lists")
+    .select("*")
+    .eq("id", listId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return normalizeShoppingListStoreId(data);
+}
+
+async function shouldSkipPurchaseInsert({ userId, storeId, productId, purchasedAt }) {
+  // Keep at most one purchase entry per product/store/day for a user.
+  const dayStart = new Date(
+    purchasedAt.getFullYear(),
+    purchasedAt.getMonth(),
+    purchasedAt.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  const nextDayStart = new Date(
+    purchasedAt.getFullYear(),
+    purchasedAt.getMonth(),
+    purchasedAt.getDate() + 1,
+    0,
+    0,
+    0,
+    0,
+  );
+
+  const { data, error } = await supabase
+    .from("purchase_history")
+    .select("id, purchased_at")
+    .eq("user_id", userId)
+    .eq("store_id", storeId)
+    .eq("product_id", productId)
+    .gte("purchased_at", dayStart.toISOString())
+    .lt("purchased_at", nextDayStart.toISOString())
+    .order("purchased_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data?.length);
+}
+
+async function insertPurchaseHistoryEntry({ userId, storeId, productId, purchasedAt }) {
+  const shouldSkip = await shouldSkipPurchaseInsert({
+    userId,
+    storeId,
+    productId,
+    purchasedAt,
+  });
+
+  if (shouldSkip) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("purchase_history")
+    .insert({
+      user_id: userId,
+      store_id: storeId,
+      product_id: productId,
+      quantity: 1,
+      purchased_at: purchasedAt.toISOString(),
+    });
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function getShoppingListItems(listId) {
@@ -417,8 +505,21 @@ export async function getShoppingList(listId) {
     layout = layoutData ?? null;
   }
 
-  // This table/column is optional across environments; skip hard dependency.
-  const categoryOrder = [];
+  let categoryOrder = [];
+
+  if (list.store_layout_id) {
+    const { data: categoryOrderRows, error: categoryOrderError } = await supabase
+      .from("store_category_order")
+      .select("layout_id, category_id, display_order")
+      .eq("layout_id", list.store_layout_id)
+      .order("display_order", { ascending: true });
+
+    if (categoryOrderError) {
+      throw categoryOrderError;
+    }
+
+    categoryOrder = normalizeCategoryOrder(categoryOrderRows ?? []);
+  }
 
   const items = await getShoppingListItems(listId);
 
@@ -514,12 +615,32 @@ export async function toggleItemChecked(itemId, checked) {
   await requireItemAccess(itemId);
 
   const nextCheckedState = Boolean(checked);
+  const { data: currentItem, error: currentItemError } = await supabase
+    .from("shopping_list_items")
+    .select("id, shopping_list_id, product_id, is_checked")
+    .eq("id", itemId)
+    .maybeSingle();
+
+  if (currentItemError) {
+    throw currentItemError;
+  }
+
+  if (!currentItem) {
+    throw createListAccessError(
+      LIST_ACCESS_ERROR_CODES.NOT_FOUND,
+      "Shopping list item not found.",
+    );
+  }
+
+  const wasChecked = Boolean(currentItem.is_checked);
+  const currentUserId = await getCurrentUserId();
+  const purchaseTimestamp = new Date();
 
   const { error } = await supabase
     .from("shopping_list_items")
     .update({
       is_checked: nextCheckedState,
-      checked_at: nextCheckedState ? new Date().toISOString() : null,
+      checked_at: nextCheckedState ? purchaseTimestamp.toISOString() : null,
     })
     .eq("id", itemId);
 
@@ -531,6 +652,35 @@ export async function toggleItemChecked(itemId, checked) {
     });
     throw error;
   }
+
+  const shouldInsertPurchase = Boolean(
+    nextCheckedState
+      && !wasChecked
+      && currentItem.product_id
+      && currentUserId,
+  );
+
+  if (!shouldInsertPurchase) {
+    return;
+  }
+
+  const shoppingListId = String(getItemListId(currentItem) ?? "");
+  if (!shoppingListId) {
+    return;
+  }
+
+  const storeId = await getShoppingListStoreId(shoppingListId);
+
+  if (!storeId) {
+    return;
+  }
+
+  await insertPurchaseHistoryEntry({
+    userId: currentUserId,
+    storeId,
+    productId: currentItem.product_id,
+    purchasedAt: purchaseTimestamp,
+  });
 }
 
 export async function deleteListItem(itemId) {
@@ -601,64 +751,58 @@ export async function getSuggestedProducts(list, dismissedProductIds = []) {
   }
 
   const dismissedIds = new Set(dismissedProductIds.map((id) => String(id)));
-  const listId = sourceListId;
   const userId = await getCurrentUserId();
 
-  const { data: checkedItems, error } = await supabase
-    .from("shopping_list_items")
-    .select("*")
-    .eq("is_checked", true)
-    .limit(1500);
+  if (!userId) {
+    return [];
+  }
+
+  const storeId = normalizeShoppingListStoreId(list);
+  if (!storeId) {
+    return [];
+  }
+
+  const existingProductIdsOnList = new Set(
+    (list?.items ?? [])
+      .map((item) => item?.product_id)
+      .filter(Boolean)
+      .map((id) => String(id)),
+  );
+
+  const { data: purchaseRows, error } = await supabase
+    .from("purchase_history")
+    .select("product_id")
+    .eq("user_id", userId)
+    .eq("store_id", storeId)
+    .not("product_id", "is", null)
+    .order("purchased_at", { ascending: false })
+    .limit(2500);
 
   if (error) {
     throw error;
   }
 
-  let allowedListIds = [];
-  if (userId) {
-    const userIdColumns = ["user_id", "created_by"];
-
-    const { data: userLists } = await queryByPossibleColumns(
-      (column, value) => supabase
-        .from("shopping_lists")
-        .select("id")
-        .eq(column, value),
-      userIdColumns,
-      userId,
-    );
-
-    allowedListIds = (userLists ?? []).map((userList) => String(userList.id));
-  }
-
   const usageByProductId = new Map();
 
-  for (const item of checkedItems ?? []) {
-    const productId = item.product_id;
-
+  for (const purchaseRow of purchaseRows ?? []) {
+    const productId = purchaseRow.product_id;
     if (!productId) {
       continue;
     }
 
-    if (userId && allowedListIds.length > 0) {
-      const itemListId = String(getItemListId(item) ?? "");
-      if (!allowedListIds.includes(itemListId)) {
-        continue;
-      }
-    }
-
-    if (!userId && listId && String(getItemListId(item) ?? "") !== String(listId)) {
+    const key = String(productId);
+    if (dismissedIds.has(key) || existingProductIdsOnList.has(key)) {
       continue;
     }
 
-    const key = String(productId);
     usageByProductId.set(key, (usageByProductId.get(key) ?? 0) + 1);
   }
 
   const rankedProductIds = Array.from(usageByProductId.entries())
+    .filter(([, usageCount]) => usageCount > 1)
     .sort((a, b) => b[1] - a[1])
     .map(([productId]) => productId)
-    .filter((productId) => !dismissedIds.has(productId))
-    .slice(0, 10);
+    .slice(0, 30);
 
   if (rankedProductIds.length === 0) {
     return [];
