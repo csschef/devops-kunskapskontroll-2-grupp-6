@@ -1,6 +1,26 @@
 import { supabase } from "../../api-service.js";
 
-const LIST_REFERENCE_COLUMNS = ["shopping_list_id", "list_id"];
+const LIST_REFERENCE_COLUMNS = ["shopping_list_id"];
+export const LIST_ACCESS_ERROR_CODES = Object.freeze({
+  UNAUTHENTICATED: "LIST_ACCESS_UNAUTHENTICATED",
+  NOT_FOUND: "LIST_ACCESS_NOT_FOUND",
+  FORBIDDEN: "LIST_ACCESS_FORBIDDEN",
+});
+
+const CATEGORY_LABEL_BY_SLUG = {
+  "frukt-gront": "Frukt & Grönt",
+  "brod-bakverk": "Bröd & Bakverk",
+  "kott-fagel": "Kött & Fågel",
+  "fisk-skaldjur": "Fisk & Skaldjur",
+  "chark-palagg": "Chark & Pålägg",
+  "mejeri-agg": "Mejeri & Ägg",
+  "frysvaror": "Frysvaror",
+  "torrvaror": "Torrvaror",
+  "hygien-hushall": "Hygien & Hushåll",
+  "dryck": "Dryck",
+  "snacks-godis": "Snacks & Godis",
+  "ovrigt": "Övrigt",
+};
 
 function getFirstTruthyValue(record, keys) {
   for (const key of keys) {
@@ -14,6 +34,208 @@ function getFirstTruthyValue(record, keys) {
 
 function getItemListId(item) {
   return getFirstTruthyValue(item, LIST_REFERENCE_COLUMNS);
+}
+
+function normalizeCategorySlug(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_\s]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function toTitleCaseFromSlug(value) {
+  return normalizeCategorySlug(value)
+    .split("-")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function normalizeCategoryName(value) {
+  const normalizedSlug = normalizeCategorySlug(value);
+
+  if (!normalizedSlug) {
+    return "Diverse";
+  }
+
+  if (CATEGORY_LABEL_BY_SLUG[normalizedSlug]) {
+    return CATEGORY_LABEL_BY_SLUG[normalizedSlug];
+  }
+
+  return toTitleCaseFromSlug(normalizedSlug) || "Diverse";
+}
+
+function createListAccessError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function requireSupabaseClient() {
+  if (!supabase) {
+    throw new Error("Supabase is not configured.");
+  }
+}
+
+async function getCurrentUserId() {
+  requireSupabaseClient();
+
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.user?.id ?? null;
+}
+
+async function getListAccessContext(listId, userId) {
+  const trimmedListId = String(listId ?? "").trim();
+
+  if (!trimmedListId) {
+    return {
+      listExists: false,
+      hasAccess: false,
+      isOwner: false,
+      isMember: false,
+      ownerId: null,
+    };
+  }
+
+  const { data: listRecord, error: listError } = await supabase
+    .from("shopping_lists")
+    .select("id, user_id")
+    .eq("id", trimmedListId)
+    .maybeSingle();
+
+  if (listError) {
+    throw listError;
+  }
+
+  if (!listRecord) {
+    return {
+      listExists: false,
+      hasAccess: false,
+      isOwner: false,
+      isMember: false,
+      ownerId: null,
+    };
+  }
+
+  const ownerId = String(listRecord.user_id ?? "");
+  const normalizedUserId = String(userId ?? "");
+  const isOwner = Boolean(normalizedUserId) && ownerId === normalizedUserId;
+
+  if (isOwner) {
+    return {
+      listExists: true,
+      hasAccess: true,
+      isOwner: true,
+      isMember: false,
+      ownerId,
+    };
+  }
+
+  if (!normalizedUserId) {
+    return {
+      listExists: true,
+      hasAccess: false,
+      isOwner: false,
+      isMember: false,
+      ownerId,
+    };
+  }
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("shopping_list_members")
+    .select("id")
+    .eq("shopping_list_id", trimmedListId)
+    .eq("user_id", normalizedUserId)
+    .maybeSingle();
+
+  if (membershipError) {
+    throw membershipError;
+  }
+
+  const isMember = Boolean(membership);
+
+  return {
+    listExists: true,
+    hasAccess: isMember,
+    isOwner: false,
+    isMember,
+    ownerId,
+  };
+}
+
+async function requireListAccess(listId, { allowMissing = false } = {}) {
+  const userId = await getCurrentUserId();
+
+  if (!userId) {
+    throw createListAccessError(
+      LIST_ACCESS_ERROR_CODES.UNAUTHENTICATED,
+      "You must be logged in to access this list.",
+    );
+  }
+
+  const context = await getListAccessContext(listId, userId);
+
+  if (!context.listExists) {
+    if (allowMissing) {
+      return { userId, context };
+    }
+
+    throw createListAccessError(
+      LIST_ACCESS_ERROR_CODES.NOT_FOUND,
+      "Shopping list not found.",
+    );
+  }
+
+  if (!context.hasAccess) {
+    throw createListAccessError(
+      LIST_ACCESS_ERROR_CODES.FORBIDDEN,
+      "You do not have access to this shopping list.",
+    );
+  }
+
+  return { userId, context };
+}
+
+async function getListIdForItem(itemId) {
+  const { data, error } = await supabase
+    .from("shopping_list_items")
+    .select("shopping_list_id")
+    .eq("id", itemId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  const listId = getItemListId(data);
+
+  if (!listId) {
+    throw createListAccessError(
+      LIST_ACCESS_ERROR_CODES.NOT_FOUND,
+      "Shopping list item not found.",
+    );
+  }
+
+  return String(listId);
+}
+
+async function requireItemAccess(itemId) {
+  const listId = await getListIdForItem(itemId);
+  await requireListAccess(listId);
+}
+
+export async function userHasAccessToList(listId, userId) {
+  const context = await getListAccessContext(listId, userId);
+  return context.listExists && context.hasAccess;
 }
 
 async function queryByPossibleColumns(queryFactory, candidateColumns, value) {
@@ -62,6 +284,8 @@ function normalizeCategoryOrder(categoryOrderRows) {
 }
 
 export async function getShoppingListItems(listId) {
+  await requireListAccess(listId);
+
   const { data: itemRows } = await queryByPossibleColumns(
     (column, value) => supabase
       .from("shopping_list_items")
@@ -124,14 +348,15 @@ export async function getShoppingListItems(listId) {
       ?? null;
 
     const category = categoryId ? categoriesById.get(categoryId) ?? null : null;
+    const categoryName = normalizeCategoryName(category?.name ?? item.category_name ?? product?.category_name);
 
     return {
       ...item,
-      list_id: getItemListId(item),
+      shopping_list_id: getItemListId(item),
       product,
       category,
       display_name: item.custom_name || product?.name || "Okand vara",
-      category_name: category?.name || "Diverse",
+      category_name: categoryName,
       is_checked: Boolean(item.is_checked),
       notes: String(item.notes ?? ""),
       is_custom: Boolean(item.custom_name && !item.product_id),
@@ -140,6 +365,12 @@ export async function getShoppingListItems(listId) {
 }
 
 export async function getShoppingList(listId) {
+  const { context } = await requireListAccess(listId, { allowMissing: true });
+
+  if (!context.listExists) {
+    return null;
+  }
+
   const { data: listData, error: listError } = await supabase
     .from("shopping_lists")
     .select("*")
@@ -252,16 +483,15 @@ export async function addShoppingListItem(listId, { productId = null, customName
     throw new Error("Either productId or customName is required.");
   }
 
+  await requireListAccess(trimmedListId);
+
   const basePayload = {
     product_id: productId ?? null,
     custom_name: productId ? null : cleanedCustomName,
     is_checked: false,
   };
 
-  const payloadVariants = [
-    { shopping_list_id: trimmedListId, ...basePayload },
-    { list_id: trimmedListId, ...basePayload },
-  ];
+  const payloadVariants = [{ shopping_list_id: trimmedListId, ...basePayload }];
 
   return insertShoppingListItem(payloadVariants);
 }
@@ -281,17 +511,31 @@ export async function addCustomItem(listId, name) {
 }
 
 export async function toggleItemChecked(itemId, checked) {
+  await requireItemAccess(itemId);
+
+  const nextCheckedState = Boolean(checked);
+
   const { error } = await supabase
     .from("shopping_list_items")
-    .update({ is_checked: checked })
+    .update({
+      is_checked: nextCheckedState,
+      checked_at: nextCheckedState ? new Date().toISOString() : null,
+    })
     .eq("id", itemId);
 
   if (error) {
+    console.error("toggleItemChecked failed", {
+      itemId,
+      checked: nextCheckedState,
+      error,
+    });
     throw error;
   }
 }
 
 export async function deleteListItem(itemId) {
+  await requireItemAccess(itemId);
+
   const { error } = await supabase
     .from("shopping_list_items")
     .delete()
@@ -303,6 +547,8 @@ export async function deleteListItem(itemId) {
 }
 
 export async function updateItemNotes(itemId, notes) {
+  await requireItemAccess(itemId);
+
   const noteText = String(notes ?? "");
 
   const payloads = [{ notes: noteText }, { note: noteText }];
@@ -325,6 +571,8 @@ export async function updateItemNotes(itemId, notes) {
 }
 
 export async function updateShoppingListTitle(listId, title) {
+  await requireListAccess(listId);
+
   const trimmedTitle = String(title ?? "").trim();
   const payloads = [{ title: trimmedTitle }, { name: trimmedTitle }];
   let lastError = null;
@@ -346,9 +594,15 @@ export async function updateShoppingListTitle(listId, title) {
 }
 
 export async function getSuggestedProducts(list, dismissedProductIds = []) {
+  const sourceListId = String(list?.id ?? "").trim();
+
+  if (sourceListId) {
+    await requireListAccess(sourceListId);
+  }
+
   const dismissedIds = new Set(dismissedProductIds.map((id) => String(id)));
-  const listId = list?.id;
-  const userId = list?.user_id;
+  const listId = sourceListId;
+  const userId = await getCurrentUserId();
 
   const { data: checkedItems, error } = await supabase
     .from("shopping_list_items")
@@ -451,6 +705,72 @@ export async function getStores() {
   return data ?? [];
 }
 
+export async function searchStores({ storeName, city }) {
+  const trimmedStoreName = String(storeName ?? "").trim();
+  const trimmedCity = String(city ?? "").trim();
+
+  if (!trimmedStoreName && !trimmedCity) {
+    return [];
+  }
+
+  let query = supabase.from("stores").select("id, name, city");
+
+  if (trimmedStoreName) {
+    query = query.ilike("name", `%${trimmedStoreName}%`);
+  }
+
+  if (trimmedCity) {
+    query = query.ilike("city", `%${trimmedCity}%`);
+  }
+
+  const { data, error } = await query.limit(10);
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function findOrCreateStore({ storeName, city }) {
+  const trimmedStoreName = String(storeName ?? "").trim();
+  const trimmedCity = String(city ?? "").trim();
+
+  if (!trimmedStoreName || !trimmedCity) {
+    throw new Error("Both store name and city are required.");
+  }
+
+  const { data: existingStores, error: existingStoreError } = await supabase
+    .from("stores")
+    .select("id, name, city")
+    .ilike("name", trimmedStoreName)
+    .ilike("city", trimmedCity)
+    .limit(1);
+
+  if (existingStoreError) {
+    throw existingStoreError;
+  }
+
+  if (existingStores?.length) {
+    return existingStores[0];
+  }
+
+  const { data: insertedStore, error: insertError } = await supabase
+    .from("stores")
+    .insert({
+      name: trimmedStoreName,
+      city: trimmedCity,
+    })
+    .select("id, name, city")
+    .single();
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return insertedStore;
+}
+
 export async function getStoreLayouts(storeId) {
   if (!storeId) {
     return [];
@@ -474,6 +794,8 @@ export async function updateShoppingListStoreAndLayout(listId, { storeId, layout
   if (!trimmedListId || !storeId) {
     throw new Error("List id and store id are required.");
   }
+
+  await requireListAccess(trimmedListId);
 
   const payloads = [
     { store_id: storeId, store_layout_id: layoutId },

@@ -32,6 +32,34 @@ let searchDebounceTimer;
 let latestSearchRequestId = 0;
 let pageEventController;
 
+function navigateToLayoutEditorWithStorePrefill() {
+	const storeName = String(
+		state.selectedStore?.name
+			?? state.storeNameQuery
+			?? "",
+	).trim();
+	const city = String(
+		state.selectedStore?.city
+			?? state.cityQuery
+			?? "",
+	).trim();
+
+	if (!storeName && !city) {
+		navigateTo("/layout-editor");
+		return;
+	}
+
+	const query = new URLSearchParams();
+	if (storeName) {
+		query.set("storeName", storeName);
+	}
+	if (city) {
+		query.set("city", city);
+	}
+
+	navigateTo(`/layout-editor?${query.toString()}`);
+}
+
 async function createListAndNavigate(layoutId = null) {
 	if (!state.selectedStore) {
 		return;
@@ -170,6 +198,29 @@ function sortLayoutsForDisplay(layouts) {
 	});
 }
 
+function getLayoutAuthorLabel(layout) {
+	if (!layout) {
+		return "Okand skapare";
+	}
+
+	const authorName = String(layout.author_name ?? "").trim();
+	if (authorName) {
+		return authorName;
+	}
+
+	return "Okand skapare";
+}
+
+function getLayoutDisplayLabel(layout) {
+	const authorLabel = getLayoutAuthorLabel(layout);
+
+	if (authorLabel === "Okand skapare") {
+		return "Okand skapares layout";
+	}
+
+	return `${authorLabel}s layout`;
+}
+
 function renderLayouts() {
 	const wrapper = document.querySelector("#layout-list-wrapper");
 	const list = document.querySelector("#layout-list");
@@ -251,9 +302,9 @@ function renderLayouts() {
 							: ""
 						}"
 						data-layout-id="${layout.id}"
-						aria-label="Välj layout ${layout.name}"
+						aria-label="Valj ${getLayoutDisplayLabel(layout)}"
 					>
-						<span class="layout-row-info">${layout.name}</span>
+						<span class="layout-row-info">${getLayoutDisplayLabel(layout)}</span>
 						<span class="layout-row-rating">⭐ ${Number(layout.usage_count ?? 0)}</span>
 					</button>
 				`,
@@ -279,7 +330,7 @@ function renderLayouts() {
 		</button>`;
 
 	if (state.selectedLayout) {
-		selectedLayoutSummary.textContent = `Vald layout: ${state.selectedLayout.name}`;
+		selectedLayoutSummary.textContent = `Vald layout: ${getLayoutDisplayLabel(state.selectedLayout)}`;
 	} else {
 		selectedLayoutSummary.textContent = "";
 	}
@@ -330,6 +381,8 @@ async function handleStoreSelection(storeId) {
 	}
 
 	state.selectedStore = selected;
+	state.storeNameQuery = String(selected.name ?? "");
+	state.cityQuery = String(selected.city ?? "");
 	state.selectedLayout = null;
 	state.layoutsError = "";
 	state.createListError = "";
@@ -337,6 +390,17 @@ async function handleStoreSelection(storeId) {
 	state.isStoreDropdownOpen = false;
 	renderStoreResults();
 	renderLayouts();
+
+	const storeNameInput = document.querySelector("#store-name-input");
+	const cityInput = document.querySelector("#city-input");
+
+	if (storeNameInput) {
+		storeNameInput.value = state.storeNameQuery;
+	}
+
+	if (cityInput) {
+		cityInput.value = state.cityQuery;
+	}
 
 	try {
 		const rankedLayouts = await getStoreLayoutsRanked(selected.id);
@@ -553,7 +617,7 @@ function initCreateListPage() {
 			const createLayoutButton = event.target.closest("[data-create-layout]");
 
 			if (createLayoutButton) {
-				navigateTo("/layout-editor");
+				navigateToLayoutEditorWithStorePrefill();
 				return;
 			}
 

@@ -91,14 +91,77 @@ export async function getStoreLayoutsRanked(storeId) {
     return [];
   }
 
-  // Derive ranked output from store_layouts to avoid dependency on optional SQL views.
   const layouts = await loadStoreLayouts(storeId);
+  const layoutIds = layouts
+    .map((layout) => String(layout?.id ?? "").trim())
+    .filter(Boolean);
 
-  return [...layouts]
-    .map((layout) => ({
-      ...layout,
-      usage_count: Number(layout.usage_count ?? 0),
-    }))
+  let usedLayoutIds = new Set();
+
+  if (layoutIds.length) {
+    const { data: usageRows, error: usageError } = await supabase
+      .from("shopping_lists")
+      .select("layout_id")
+      .in("layout_id", layoutIds);
+
+    if (usageError) {
+      throw usageError;
+    }
+
+    usedLayoutIds = new Set(
+      (usageRows ?? [])
+        .map((row) => String(row?.layout_id ?? "").trim())
+        .filter(Boolean),
+    );
+  }
+
+  const { data: authData } = await supabase.auth.getUser();
+  const authUser = authData?.user ?? null;
+  const authUserId = String(authUser?.id ?? "").trim();
+  let authUserName = String(
+    authUser?.user_metadata?.name
+      ?? authUser?.user_metadata?.full_name
+      ?? "",
+  ).trim();
+
+  if (authUserId && !authUserName) {
+    const { data: ownProfile } = await supabase
+      .from("profiles")
+      .select("id, name")
+      .eq("id", authUserId)
+      .maybeSingle();
+
+    authUserName = String(ownProfile?.name ?? "").trim();
+  }
+
+  const enrichedLayouts = await Promise.all(
+    layouts.map(async (layout) => {
+      const creatorId = String(layout?.created_by ?? "").trim();
+      let authorName = "";
+
+      if (creatorId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id, name")
+          .eq("id", creatorId)
+          .maybeSingle();
+
+        authorName = String(profile?.name ?? "").trim();
+
+        if (!authorName && creatorId === authUserId) {
+          authorName = authUserName;
+        }
+      }
+
+      return {
+        ...layout,
+        usage_count: usedLayoutIds.has(String(layout?.id ?? "").trim()) ? 1 : 0,
+        author_name: authorName,
+      };
+    }),
+  );
+
+  return [...enrichedLayouts]
     .sort((a, b) => Number(b.usage_count ?? 0) - Number(a.usage_count ?? 0));
 }
 
