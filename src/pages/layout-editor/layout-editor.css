@@ -338,16 +338,6 @@ body.layout-editor-touch-dragging {
   min-width: 72px;
 }
 
-#layout-editor-existing-layout-yes {
-  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
-  color: var(--color-on-primary);
-}
-
-#layout-editor-existing-layout-no {
-  background: var(--gradient-button-danger-default);
-  color: var(--color-on-primary);
-}
-
 #layout-editor-inactive-list .layout-editor-section-card,
 #layout-editor-active-list .layout-editor-section-card {
   position: relative;

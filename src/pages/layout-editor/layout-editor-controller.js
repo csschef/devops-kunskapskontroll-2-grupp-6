@@ -887,13 +887,13 @@ function ensureExistingLayoutPromptElements() {
 	const yesButton = document.createElement("button");
 	yesButton.type = "button";
 	yesButton.id = EXISTING_LAYOUT_PROMPT_YES_ID;
-	yesButton.className = "btn btn-primary btn-small";
+	yesButton.className = "btn btn-primary";
 	yesButton.textContent = "Ja";
 
 	const noButton = document.createElement("button");
 	noButton.type = "button";
 	noButton.id = EXISTING_LAYOUT_PROMPT_NO_ID;
-	noButton.className = "btn btn-danger btn-small";
+	noButton.className = "btn btn-secondary";
 	noButton.textContent = "Nej";
 
 	actions.append(yesButton, noButton);
