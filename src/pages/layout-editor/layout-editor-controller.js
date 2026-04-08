@@ -654,17 +654,14 @@ function handleDocumentTouchMove(event) {
 	// Visa det flytande proxy-kortet för alla drag-scenarion (oavsett källlista)
 	touchDraggedCard.classList.add("is-hovering-to-active");
 	const dragHandle = touchDraggedCard.querySelector(".layout-editor-drag-handle");
-	let offsetX = 0;
-	let offsetY = 0;
-	if (dragHandle) {
-		const cardRect = touchDraggedCard.getBoundingClientRect();
-		const handleRect = dragHandle.getBoundingClientRect();
-		offsetX = (handleRect.left + handleRect.width / 2) - cardRect.left;
-		offsetY = (handleRect.top + handleRect.height / 2) - cardRect.top;
-	} else {
-		offsetX = touchDraggedCard.offsetWidth - 24;
-		offsetY = touchDraggedCard.offsetHeight / 2;
-	}
+	const cardRect = dragHandle ? touchDraggedCard.getBoundingClientRect() : null;
+	const handleRect = dragHandle ? dragHandle.getBoundingClientRect() : null;
+	const offsetX = dragHandle
+		? (handleRect.left + handleRect.width / 2) - cardRect.left
+		: touchDraggedCard.offsetWidth - 24;
+	const offsetY = dragHandle
+		? (handleRect.top + handleRect.height / 2) - cardRect.top
+		: touchDraggedCard.offsetHeight / 2;
 	touchDraggedCard.style.left = (touchClientX - offsetX) + "px";
 	touchDraggedCard.style.top = (touchClientY - offsetY) + "px";
 }
