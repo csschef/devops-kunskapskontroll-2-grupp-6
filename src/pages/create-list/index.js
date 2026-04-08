@@ -244,15 +244,6 @@ function renderLayouts() {
 	if (state.layoutsError) {
 		list.innerHTML = `
 			<p class="create-list__status-text">${state.layoutsError}</p>
-			<button
-				type="button"
-				class="layout-row"
-				data-skip-layout="true"
-				aria-label="Fortsatt utan layout"
-			>
-				<span class="layout-row-info">Fortsatt utan layout (temporärt)</span>
-				<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
-			</button>
 		`;
 		selectedLayoutSummary.textContent = "";
 		return;
@@ -267,15 +258,6 @@ function renderLayouts() {
 	if (state.layouts.length === 0) {
 		list.innerHTML = `
 			<p class="create-list__status-text">Det finns inga layouter för den här butiken än.</p>
-			<button
-				type="button"
-				class="layout-row"
-				data-skip-layout="true"
-				aria-label="Fortsatt utan layout"
-			>
-				<span class="layout-row-info">Fortsatt utan layout (temporart)</span>
-				<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
-			</button>
 			<button
 				type="button"
 				class="layout-row layout-row--create"
@@ -310,15 +292,6 @@ function renderLayouts() {
 				`,
 			)
 			.join("") +
-		`<button
-			type="button"
-			class="layout-row"
-			data-skip-layout="true"
-			aria-label="Fortsatt utan layout"
-		>
-			<span class="layout-row-info">Fortsatt utan layout (temporart)</span>
-			<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
-		</button>` +
 		`<button
 			type="button"
 			class="layout-row layout-row--create"
@@ -605,15 +578,6 @@ function initCreateListPage() {
 	layoutList.addEventListener(
 		"click",
 		async (event) => {
-			const skipLayoutButton = event.target.closest("[data-skip-layout]");
-
-			if (skipLayoutButton) {
-				state.selectedLayout = null;
-				state.currentStep = "layout-skipped";
-				await createListAndNavigate(null);
-				return;
-			}
-
 			const createLayoutButton = event.target.closest("[data-create-layout]");
 
 			if (createLayoutButton) {
@@ -682,7 +646,7 @@ export function renderCreateListPage() {
 	});
 
 	return `
-		<section class="create-list create-list-page page-container" aria-label="Skapa inköpslista - välj butik">
+		<section class="create-list create-list-page" aria-label="Skapa inköpslista - välj butik">
 			<header class="create-list__nav create-list-header" role="banner">
 				<button type="button" id="create-list-back-button" class="create-list__back-button" aria-label="Gå tillbaka">
 					<i class="ti ti-chevron-left" aria-hidden="true"></i>
@@ -691,7 +655,9 @@ export function renderCreateListPage() {
 				<span class="create-list__header-spacer" aria-hidden="true"></span>
 			</header>
 
-			<div class="create-list__search create-list__search-card card create-list-section">
+			<div class="create-list__content page-container--narrow">
+
+				<div class="create-list__search create-list__search-card card create-list-section">
 				<div class="create-list__field-group">
 					<label class="create-list__label" for="city-input">Stad</label>
 					<input
@@ -719,11 +685,12 @@ export function renderCreateListPage() {
 				<div class="create-list__dropdown" id="store-search-results" aria-live="polite" hidden></div>
 			</div>
 
-			<div id="layout-list-wrapper" class="create-list__layouts create-list-section" hidden>
+				<div id="layout-list-wrapper" class="create-list__layouts create-list-section" hidden>
 				<h2 class="create-list__section-title">Tillgängliga layouter</h2>
 				<p id="selected-store-name" class="create-list__selected-store"></p>
 				<div id="layout-list" class="create-list__layout-list layout-list"></div>
 				<p id="selected-layout-summary" class="create-list__selected-layout" aria-live="polite"></p>
+				</div>
 			</div>
 		</section>
 	`;

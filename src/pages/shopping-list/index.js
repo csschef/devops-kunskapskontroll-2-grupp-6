@@ -12,6 +12,7 @@ import {
 	searchProducts,
 	toggleItemChecked,
 	updateItemNotes,
+	updateShoppingListTitle,
 	updateShoppingListStoreAndLayout,
 } from "./api.js";
 import "./shopping-list.css";
@@ -54,6 +55,10 @@ const state = {
 	suggestionsRefreshTimer: null,
 	productSearchRequestVersion: 0,
 	isSuggestionsCollapsed: false,
+	isTitleEditing: false,
+	isTitleSaving: false,
+	titleDraft: "",
+	titleError: "",
 };
 
 const MAX_VISIBLE_SEARCH_RESULTS = 6;
@@ -199,6 +204,86 @@ function getSelectedStore() {
 	}
 
 	return null;
+}
+
+function getDefaultListTitle() {
+	const storeName = String(state.list?.store?.name ?? "").trim();
+	const cityName = String(state.list?.store?.city ?? "").trim();
+
+	if (storeName && cityName) {
+		return `${storeName}, ${cityName}`;
+	}
+
+	if (storeName || cityName) {
+		return storeName || cityName;
+	}
+
+	return "Min Inköpslista";
+}
+
+function getListTitleForDisplay() {
+	const storedTitle = String(state.list?.title ?? "").trim();
+	return storedTitle || getDefaultListTitle();
+}
+
+function openTitleEditor() {
+	if (!state.listId || state.isTitleSaving) {
+		return;
+	}
+
+	state.isTitleEditing = true;
+	state.titleError = "";
+	state.titleDraft = getListTitleForDisplay();
+	renderTitleAndStore();
+
+	queueMicrotask(() => {
+		const titleInput = document.querySelector("#list-title-input");
+		if (titleInput instanceof HTMLInputElement) {
+			titleInput.focus();
+			titleInput.select();
+		}
+	});
+}
+
+function closeTitleEditor() {
+	state.isTitleEditing = false;
+	state.isTitleSaving = false;
+	state.titleError = "";
+	state.titleDraft = "";
+	renderTitleAndStore();
+}
+
+async function saveTitleEdit() {
+	if (!state.listId || state.isTitleSaving) {
+		return;
+	}
+
+	const fallbackTitle = getDefaultListTitle();
+	const nextTitle = String(state.titleDraft ?? "").trim() || fallbackTitle;
+	const currentTitle = getListTitleForDisplay();
+
+	if (nextTitle === currentTitle) {
+		closeTitleEditor();
+		return;
+	}
+
+	state.isTitleSaving = true;
+	state.titleError = "";
+	renderTitleAndStore();
+
+	try {
+		await updateShoppingListTitle(state.listId, nextTitle);
+		state.list = {
+			...(state.list ?? {}),
+			title: nextTitle,
+		};
+		closeTitleEditor();
+	} catch (error) {
+		console.error("Update title failed", error);
+		state.isTitleSaving = false;
+		state.titleError = "Kunde inte spara listnamnet. Försök igen.";
+		renderTitleAndStore();
+	}
 }
 
 function getCategoryOrderMap() {
@@ -615,7 +700,45 @@ function renderTitleAndStore() {
 	const titleLabel = document.querySelector("#list-title");
 	const storeToggle = document.querySelector("#list-store-toggle");
 	if (titleLabel) {
-		titleLabel.textContent = String(state.list?.title || "Min Inköpslista");
+		const displayTitle = getListTitleForDisplay();
+
+		if (state.isTitleEditing) {
+			titleLabel.innerHTML = `
+				<div class="list-page__title-input-wrapper">
+					<input
+						id="list-title-input"
+						class="input-field list-page__title-input"
+						type="text"
+						value="${escapeHtml(state.titleDraft)}"
+						maxlength="80"
+						aria-label="Redigera inköpslistans namn"
+						${state.isTitleSaving ? "disabled" : ""}
+					/>
+					<button
+						type="button"
+						id="list-title-save-btn"
+						class="list-page__title-check-btn"
+						aria-label="Spara inköpslistans namn"
+						${state.isTitleSaving ? "disabled" : ""}
+					>
+						<i class="ti ti-check" aria-hidden="true"></i>
+					</button>
+				</div>
+				${state.titleError ? `<span class="list-page__title-hint list-page__title-hint--error">${escapeHtml(state.titleError)}</span>` : ""}
+			`;
+		} else {
+			titleLabel.innerHTML = `
+				<button
+					type="button"
+					id="list-title-edit-trigger"
+					class="list-page__title-edit-button"
+					aria-label="Redigera inköpslistans namn"
+				>
+					<span class="list-page__title-text">${escapeHtml(displayTitle)}</span>
+					<i class="ti ti-pencil list-page__title-edit-icon" aria-hidden="true"></i>
+				</button>
+			`;
+		}
 	}
 
 	const storeLabel = document.querySelector("#list-store-label");
@@ -901,6 +1024,10 @@ async function loadListPageData(listId) {
 
 		state.list = list;
 		state.items = list.items ?? [];
+		state.isTitleEditing = false;
+		state.isTitleSaving = false;
+		state.titleDraft = "";
+		state.titleError = "";
 		state.allStores = stores ?? [];
 		state.availableCities = buildAvailableCities(state.allStores);
 		state.selectedStoreId = String(list.store_id ?? list.store?.id ?? "");
@@ -1312,19 +1439,31 @@ function initShoppingListPage(path) {
 				return;
 			}
 
-			const addOptionButton = target.closest("[data-add-option-type]");
-			if (addOptionButton) {
-				const { addOptionType, addProductId, addCustomName, addOptionId } = addOptionButton.dataset;
-
-				await handleSearchOptionSelection({
-					id: addOptionId,
-					type: addOptionType,
-					productId: addProductId,
-					customName: addCustomName,
-				});
-
+			const editTitleButton = target.closest("#list-title-edit-trigger");
+			if (editTitleButton) {
+				openTitleEditor();
 				return;
 			}
+
+		const saveTitleButton = target.closest("#list-title-save-btn");
+		if (saveTitleButton) {
+			await saveTitleEdit();
+			return;
+		}
+
+		const addOptionButton = target.closest("[data-add-option-type]");
+		if (addOptionButton) {
+			const { addOptionType, addProductId, addCustomName, addOptionId } = addOptionButton.dataset;
+
+			await handleSearchOptionSelection({
+				id: addOptionId,
+				type: addOptionType,
+				productId: addProductId,
+				customName: addCustomName,
+			});
+
+			return;
+		}
 
 			const addProductButton = target.closest("[data-add-product-id]:not([data-add-option-type])");
 			if (addProductButton) {
@@ -1488,6 +1627,12 @@ function initShoppingListPage(path) {
 				return;
 			}
 
+			if (target.id === "list-title-input") {
+				state.titleDraft = target.value;
+				state.titleError = "";
+				return;
+			}
+
 			if (target.id === "list-store-city-input") {
 				state.cityQuery = target.value;
 				state.storeEditorError = "";
@@ -1570,6 +1715,14 @@ function initShoppingListPage(path) {
 		"keydown",
 		async (event) => {
 			const target = event.target;
+
+			if (target instanceof HTMLInputElement && target.id === "list-title-input") {
+				if (event.key === "Escape") {
+					event.preventDefault();
+					closeTitleEditor();
+					return;
+				}
+			}
 
 			// Handle Enter on city search to accept unmmatched city as new city
 			if (target instanceof HTMLInputElement && target.id === "list-store-city-input") {
@@ -1654,6 +1807,29 @@ function initShoppingListPage(path) {
 	);
 
 	pageRoot.addEventListener(
+		"focusout",
+		async (event) => {
+			const target = event.target;
+
+			if (!(target instanceof HTMLInputElement) || target.id !== "list-title-input") {
+				return;
+			}
+
+			if (!state.isTitleEditing || state.isTitleSaving) {
+				return;
+			}
+
+			const relatedTarget = event.relatedTarget;
+			if (relatedTarget instanceof Element && relatedTarget.closest("#list-title")) {
+				return;
+			}
+
+			await saveTitleEdit();
+		},
+		{ signal },
+	);
+
+	pageRoot.addEventListener(
 		"mousemove",
 		(event) => {
 			const target = event.target;
@@ -1684,7 +1860,7 @@ export function renderShoppingListPage(path) {
 	});
 
 	return `
-		<section class="list-page page-container" aria-label="Min Inköpslista">
+		<section class="list-page" aria-label="Min Inköpslista">
 			<header class="list-page__header" role="banner">
 				<button
 					type="button"
@@ -1699,6 +1875,7 @@ export function renderShoppingListPage(path) {
 				<span class="list-page__header-spacer" aria-hidden="true"></span>
 			</header>
 
+			<div class="list-page__content page-container--narrow">
 			<div class="list-page__store-subheader-wrap">
 				<button
 					type="button"
@@ -1770,6 +1947,7 @@ export function renderShoppingListPage(path) {
 			<section id="list-suggestions-section" class="list-page__suggestion-card" aria-label="Vanliga varor" hidden></section>
 
 			<section id="list-grouped-items" class="list-page__groups" aria-live="polite"></section>
+			</div>
 		</section>
 	`;
 }
