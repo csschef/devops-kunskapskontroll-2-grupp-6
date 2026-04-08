@@ -1,0 +1,24 @@
+{
+    "requiredFieldMessage": "Alla fält måste fyllas i.",
+    "nameRules": {
+        "minLetters": 2,
+        "blockedWords": [
+            "neger",
+            "nigger",
+            "fitta"
+        ]
+    },
+    "passwordRules": {
+        "minLength": 8,
+        "requireLetter": true,
+        "requireNumber": true
+    },
+    "messages": {
+        "firstNameTooShort": "Förnamn måste vara minst {min} bokstäver.",
+        "lastNameTooShort": "Efternamn måste vara minst {min} bokstäver.",
+        "blockedName": "Namnet innehåller ord som inte är tillåtna.",
+        "passwordTooShort": "Lösenord måste vara minst {min} tecken.",
+        "passwordMissingLetter": "Lösenord måste innehålla minst en bokstav.",
+        "passwordMissingNumber": "Lösenord måste innehålla minst en siffra."
+    }
+}
