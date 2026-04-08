@@ -525,8 +525,26 @@ label {
   background: var(--gradient-button-danger-active);
 }
 
+/* Success Button */
+.btn-success {
+  background: linear-gradient(135deg, var(--color-success-500), var(--color-success-600));
+  color: var(--color-on-primary);
+}
+
+@media (hover: hover) {
+  .btn-success:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--color-success-400), var(--color-success-500));
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.btn-success:active:not(:disabled) {
+  background: linear-gradient(135deg, var(--color-success-600), var(--color-success-700));
+}
+
 .btn-primary:disabled,
 .btn-secondary:disabled,
+.btn-success:disabled,
 .btn-danger:disabled {
   background: var(--color-button-disabled-bg);
   color: var(--color-button-disabled-text);

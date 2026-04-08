@@ -1,5 +1,5 @@
 import { setupLayoutEditorPage } from "./layout-editor-controller.js";
-import "../../css/layout-editor.css";
+import "./layout-editor.css";
 import aisleLogo from "../../assets/aisle-logo.svg";
 
 const layoutEditorRouteImageUrl = new URL("../../assets/images/point-a-to-b.png", import.meta.url).href;
@@ -70,7 +70,7 @@ export function renderLayoutEditorPage() {
 				</section>
 
 				<footer id="layout-editor-actions">
-					<button type="button" class="btn btn-primary" id="layout-editor-save-button">Spara</button>
+					<button type="button" class="btn btn-success" id="layout-editor-save-button">Spara</button>
 					<button type="button" class="btn btn-danger" id="layout-editor-cancel-button">Avbryt</button>
 					<p id="layout-editor-message" aria-live="polite"></p>
 				</footer>
