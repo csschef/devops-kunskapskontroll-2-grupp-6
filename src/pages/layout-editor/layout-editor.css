@@ -308,7 +308,7 @@ body.layout-editor-touch-dragging {
 }
 
 #layout-editor-save-button.layout-editor-save-button-success {
-  background: linear-gradient(135deg, var(--color-success-500), var(--color-success-600));
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
   color: var(--color-on-primary);
 }
 

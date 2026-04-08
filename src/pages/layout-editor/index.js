@@ -70,7 +70,7 @@ export function renderLayoutEditorPage() {
 				</section>
 
 				<footer id="layout-editor-actions">
-					<button type="button" class="btn btn-success" id="layout-editor-save-button">Spara</button>
+					<button type="button" class="btn btn-primary" id="layout-editor-save-button">Spara</button>
 					<button type="button" class="btn btn-danger" id="layout-editor-cancel-button">Avbryt</button>
 					<p id="layout-editor-message" aria-live="polite"></p>
 				</footer>
