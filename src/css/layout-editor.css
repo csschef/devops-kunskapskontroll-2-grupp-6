@@ -58,6 +58,7 @@ body.layout-editor-touch-dragging {
 }
 
 @media (hover: none) and (pointer: coarse) {
+
   .layout-editor-shell::before,
   .layout-editor-shell::after {
     position: absolute;
@@ -197,6 +198,17 @@ body.layout-editor-touch-dragging {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--spacing-sm);
+}
+
+#layout-editor-active-list:empty::before {
+  content: "Dra sektioner hit för att bygga din layout";
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  margin-left: var(--spacing-sm);
+  color: var(--color-text-light);
+  font-size: var(--font-size-sm);
+  pointer-events: none;
 }
 
 #layout-editor-active-list .layout-editor-drop-marker,
@@ -390,6 +402,7 @@ body.layout-editor-touch-dragging {
 }
 
 @media (min-width: 1920px) and (hover: hover) and (pointer: fine) {
+
   #layout-editor-inactive-list .layout-editor-section-card,
   #layout-editor-active-list .layout-editor-section-card {
     cursor: grab;
@@ -446,16 +459,16 @@ body.layout-editor-touch-dragging {
     margin-bottom: var(--spacing-sm) !important;
   }
 
-  #layout-editor-brand-panel > p,
+  #layout-editor-brand-panel>p,
   #layout-editor-instructions {
     margin-top: 0;
   }
 
-  #layout-editor-brand-panel > p {
+  #layout-editor-brand-panel>p {
     margin-bottom: var(--spacing-sm);
   }
 
-  #layout-editor-header > hr {
+  #layout-editor-header>hr {
     display: none;
   }
 
@@ -474,7 +487,7 @@ body.layout-editor-touch-dragging {
     display: none;
   }
 
-  #layout-editor-instructions:not([open]) > :not(summary) {
+  #layout-editor-instructions:not([open])> :not(summary) {
     display: block !important;
   }
 
