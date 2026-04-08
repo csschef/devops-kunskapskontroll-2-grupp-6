@@ -369,6 +369,15 @@ label {
   color: var(--color-text-light);
 }
 
+.input-field:-webkit-autofill,
+.input-field:-webkit-autofill:hover,
+.input-field:-webkit-autofill:focus {
+  background-color: var(--color-white) !important;
+  -webkit-text-fill-color: var(--color-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-white) inset;
+  box-shadow: 0 0 0 1000px var(--color-white) inset;
+}
+
 /* Select Field - Custom Arrow */
 .select-field {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M1.5 4.5L6 9l4.5-4.5'/%3E%3C/svg%3E");
@@ -514,6 +523,14 @@ label {
 
 .btn-danger:active:not(:disabled) {
   background: var(--gradient-button-danger-active);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  background: var(--color-button-disabled-bg);
+  color: var(--color-button-disabled-text);
+  box-shadow: none;
 }
 
 /* Small Button */
