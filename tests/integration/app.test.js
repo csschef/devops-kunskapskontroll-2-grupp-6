@@ -1,4 +1,4 @@
-import { describe, test, expect, it } from "vitest";
+import { describe, test, expect, it, beforeEach } from "vitest";
 import { renderLayoutEditorPage } from "../../src/pages/layout-editor/index.js";
 import { setupLayoutEditorPage } from "../../src/pages/layout-editor/layout-editor-controller.js";
 import { renderHomePage } from "../../src/pages/home/index.js";
@@ -13,6 +13,10 @@ async function getSupabaseClient() {
 }
 
 describe("app integration", () => {
+	beforeEach(() => {
+		document.body.innerHTML = "";
+	});
+
 	// Viktor: Integration test for home page render output.
 	test("home page render includes key sections", () => {
 		document.body.innerHTML = renderHomePage();
