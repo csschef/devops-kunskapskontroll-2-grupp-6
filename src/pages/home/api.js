@@ -5,7 +5,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 200;
-const QUERY_LATEST_LISTS_FOR_USER = (userId) => `shopping_lists?user_id=eq.${encodeValue(userId)}&select=id,title,is_completed,updated_at,created_at,stores(name,city),store_layouts(stores(name,city))&order=updated_at.desc.nullslast,created_at.desc&limit=3`;
+const QUERY_LATEST_LISTS_FOR_USER = (userId) => `shopping_lists?user_id=eq.${encodeValue(userId)}&select=id,title,is_completed,updated_at,created_at,stores(name,city),store_layouts(stores(name,city)),profiles(name,email)&order=updated_at.desc.nullslast,created_at.desc&limit=25`;
+const QUERY_SHARED_LISTS_FOR_USER = (userId) => `shopping_list_members?user_id=eq.${encodeValue(userId)}&select=shopping_lists(id,title,is_completed,updated_at,created_at,stores(name,city),store_layouts(stores(name,city)),profiles(name,email))&limit=100`;
 const QUERY_LAYOUTS = `store_layouts?select=id,name,stores(name,city)&order=id.asc`;
 const QUERY_LAYOUT_USAGE = `shopping_lists?select=id,layout_id,user_id&layout_id=not.is.null&user_id=not.is.null&order=id.asc`;
 const QUERY_TOP_PRODUCTS = `purchase_history?select=id,product_id,quantity,products!inner(name)&product_id=not.is.null&order=id.asc`;
@@ -204,21 +205,57 @@ function findMostCommonStore(lists) {
     return `${storeLabel} (${count})`;
 }
 
+function mapListSummary(list) {
+    const resolvedStore = resolveStoreFromList(list);
+    const ownerName = String(list?.profiles?.name || list?.profiles?.email || "").trim();
+
+    return {
+        id: list?.id,
+        name: String(list?.title || "Namnlös inköpslista"),
+        updatedAt: toIsoOrNull(list?.updated_at || list?.created_at),
+        isCompleted: Boolean(list?.is_completed),
+        storeName: resolvedStore?.name || null,
+        storeCity: resolvedStore?.city || null,
+        ownerName: ownerName || null,
+    };
+}
+
+function byNewestFirst(a, b) {
+    const aTime = Date.parse(a?.updatedAt || "") || 0;
+    const bTime = Date.parse(b?.updatedAt || "") || 0;
+    return bTime - aTime;
+}
+
 async function getLatestListsForUser(userId, accessToken) {
-    const lists = await restGet(QUERY_LATEST_LISTS_FOR_USER(userId), accessToken);
+    const [ownedListsResult, membershipRowsResult] = await Promise.allSettled([
+        restGet(QUERY_LATEST_LISTS_FOR_USER(userId), accessToken),
+        restGet(QUERY_SHARED_LISTS_FOR_USER(userId), accessToken),
+    ]);
 
-    return lists.map((list) => {
-        const resolvedStore = resolveStoreFromList(list);
+    const ownedLists = pickSettledValue(ownedListsResult);
+    const membershipRows = pickSettledValue(membershipRowsResult);
 
-        return {
-            id: list.id,
-            name: String(list.title || "Namnlös inköpslista"),
-            updatedAt: toIsoOrNull(list.updated_at || list.created_at),
-            isCompleted: Boolean(list.is_completed),
-            storeName: resolvedStore?.name || null,
-            storeCity: resolvedStore?.city || null,
-        };
+    logRejected("Kunde inte hämta delade inköpslistor:", membershipRowsResult);
+
+    const sharedLists = membershipRows
+        .map((row) => row?.shopping_lists)
+        .filter(Boolean);
+
+    const deduped = new Map();
+
+    [...ownedLists, ...sharedLists].forEach((list) => {
+        const mapped = mapListSummary(list);
+        if (!mapped.id) return;
+
+        const existing = deduped.get(mapped.id);
+        if (!existing || byNewestFirst(mapped, existing) < 0) {
+            deduped.set(mapped.id, mapped);
+        }
     });
+
+    return Array.from(deduped.values())
+        .sort(byNewestFirst)
+        .slice(0, 3);
 }
 
 async function getMostUsedLayouts(accessToken) {

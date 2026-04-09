@@ -39,10 +39,14 @@ function formatRelativeDate(isoDate) {
 export function createLatestListsMarkup(lists = []) {
     return lists.map((list) => {
         const storeAndCity = `${list?.storeName || "Okänd butik"}${list?.storeCity ? ` ${list.storeCity}` : ""}`;
+        const ownerName = String(list?.ownerName || "").trim();
         return `
             <article class="home-list-row" aria-label="Inköpslista">
                 <div>
-                    <p class="home-list-name">${escapeHtml(list?.name || "Namnlös inköpslista")}</p>
+                    <p class="home-list-name-row">
+                        <span class="home-list-name">${escapeHtml(list?.name || "Namnlös inköpslista")}</span>
+                        ${ownerName ? `<span class="home-list-owner">Av ${escapeHtml(ownerName)}</span>` : ""}
+                    </p>
                     <p class="home-list-subline">${escapeHtml(storeAndCity)}, ${formatRelativeDate(list?.updatedAt)}</p>
                 </div>
                 <a href="/list/${encodeURIComponent(String(list?.id || ""))}" class="btn btn-secondary btn-small home-list-link" aria-label="Visa inköpslista ${escapeHtml(list?.name || "")}">Visa</a>

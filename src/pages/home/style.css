@@ -105,14 +105,19 @@
 }
 
 .home-hero .btn-primary {
+    border: 1px solid var(--color-border);
     background: var(--color-white);
-    color: var(--color-primary-800);
-    border-color: var(--color-primary-100);
+    color: var(--color-text);
+    box-shadow: var(--shadow-sm);
+}
+
+.home-hero .btn-primary i {
+    color: var(--color-text-secondary);
 }
 
 @media (hover: hover) {
     .home-hero .btn-primary:hover:not(:disabled) {
-        background: linear-gradient(135deg, var(--color-white), var(--color-primary-100));
+        background: var(--color-primary-100);
     }
 }
 
@@ -221,6 +226,22 @@
     margin: 0;
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
+}
+
+.home-list-name-row {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.home-list-owner {
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    opacity: 0.78;
 }
 
 .home-list-subline {
