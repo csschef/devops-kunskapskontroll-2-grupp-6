@@ -1,5 +1,5 @@
 import { setupLayoutEditorPage } from "./layout-editor-controller.js";
-import "../../css/layout-editor.css";
+import "./layout-editor.css";
 import aisleLogo from "../../assets/aisle-logo.svg";
 
 const layoutEditorRouteImageUrl = new URL("../../assets/images/point-a-to-b.png", import.meta.url).href;
@@ -16,7 +16,7 @@ export function renderLayoutEditorPage() {
 				<section id="layout-editor-brand-panel">
 					<div id="layout-editor-heading-group">
 						<span class="auth-logo layout-editor-logo" role="img" aria-label="AISLE logo" style="--auth-logo-src: url('${aisleLogo}')"></span>
-						<h1>Skapa din butikslayout</h1>
+						<h1>Skapa <span style="color: var(--color-primary-500)">din</span> butikslayout</h1>
 					</div>
 					<p>Lägg till gångordningen för din butik genom att dra sektioner i rätt ordning.</p>
 
@@ -27,7 +27,7 @@ export function renderLayoutEditorPage() {
 								<li>Fyll i butiksnamn och stad.</li>
 								<li>Dra sektioner från inaktiv lista till aktiv lista.</li>
 								<li>Sortera sektionerna i aktiv lista i samma ordning som de kommer i butiken.</li>
-								<li>Klicka på spara butikslayout.</li>
+								<li>Klicka på spara.</li>
 							</ul>
 						</div>
 					</details>
@@ -70,8 +70,8 @@ export function renderLayoutEditorPage() {
 				</section>
 
 				<footer id="layout-editor-actions">
-					<button type="button" class="btn btn-primary" id="layout-editor-save-button">Spara butikslayout</button>
-					<button type="button" class="btn btn-danger" id="layout-editor-cancel-button">Avbryt</button>
+					<button type="button" class="btn btn-primary" id="layout-editor-save-button">Spara</button>
+					<button type="button" class="btn btn-secondary" id="layout-editor-cancel-button">Avbryt</button>
 					<p id="layout-editor-message" aria-live="polite"></p>
 				</footer>
 				</section>

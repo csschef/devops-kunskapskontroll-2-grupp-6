@@ -1,20 +1,109 @@
-import { fetchSectionCategories } from "./layout-service.js";
+import { navigateTo } from "../../router/router.js";
+import { fetchSectionCategories, findMyLayoutByStoreAndCity, saveStoreLayout } from "./layout-service.js";
 
 const DND_CARD_SELECTOR = ".layout-editor-section-card";
 const DND_HANDLE_SELECTOR = ".layout-editor-drag-handle";
-const TOUCH_AUTO_SCROLL_EDGE_PX = 88;
-const TOUCH_AUTO_SCROLL_MAX_STEP = 18;
+const TOUCH_AUTO_SCROLL_EDGE_PX = 140;
+const TOUCH_AUTO_SCROLL_MIN_STEP = 10;
+const TOUCH_AUTO_SCROLL_MAX_STEP = 42;
+const TOUCH_AUTO_SCROLL_SPEED_MULTIPLIER = 0.6;
+const TOUCH_AUTO_SCROLL_INTERVAL_MS = 16;
 const FULL_CARD_DRAG_MIN_WIDTH = 1920;
 let touchDraggedCard = null;
 let mouseDraggedCard = null;
+let mouseDragProxy = null;
+let mouseDragProxyOffsetX = 0;
+let mouseDragProxyOffsetY = 0;
 let currentDropMarkerElement = null;
 let pendingDropTargetList = null;
 let pendingDropTargetCard = null;
 let touchClientX = 0;
 let touchClientY = 0;
-let touchAutoScrollFrameId = null;
+let touchAutoScrollIntervalId = null;
+let currentTouchAutoScrollStep = 0;
+let mouseAutoScrollIntervalId = null;
+let currentMouseAutoScrollStep = 0;
 let pageLifecycleAbortController = null;
+let activeListMutationObserver = null;
+let saveActionIsPending = false;
+let existingLayoutConflict = null;
+let existingLayoutCheckTimeoutId = null;
+let existingLayoutCheckRequestId = 0;
+let editModeBaselineFingerprint = "";
 const DESKTOP_LAYOUT_MIN_WIDTH = 900;
+const DEFAULT_CANCEL_PATH = "/profile";
+const SAVE_SUCCESS_REDIRECT_DELAY_MS = 700;
+const EXISTING_LAYOUT_CHECK_DEBOUNCE_MS = 280;
+const EXISTING_LAYOUT_PROMPT_ID = "layout-editor-existing-layout-prompt";
+const EXISTING_LAYOUT_PROMPT_MESSAGE_ID = "layout-editor-existing-layout-message";
+const EXISTING_LAYOUT_PROMPT_YES_ID = "layout-editor-existing-layout-yes";
+const EXISTING_LAYOUT_PROMPT_NO_ID = "layout-editor-existing-layout-no";
+
+function firstNonEmpty(...values) {
+	for (const value of values) {
+		if (typeof value === "string" && value.trim()) {
+			return value.trim();
+		}
+	}
+
+	return "";
+}
+
+function parseSectionsValue(rawValue) {
+	if (!rawValue) return [];
+
+	const normalizedRawValue = String(rawValue).trim();
+	if (!normalizedRawValue) return [];
+
+	if (normalizedRawValue.startsWith("[")) {
+		try {
+			const parsed = JSON.parse(normalizedRawValue);
+			if (Array.isArray(parsed)) {
+				return parsed.map((value) => normalizeSectionSlug(value)).filter(Boolean);
+			}
+		} catch {
+			// Faller tillbaka till kommaseparerad tolkning.
+		}
+	}
+
+	return normalizedRawValue
+		.split(",")
+		.map((value) => normalizeSectionSlug(value))
+		.filter(Boolean);
+}
+
+function normalizeReturnPath(rawPath) {
+	if (!rawPath) return "";
+
+	try {
+		const parsedUrl = new URL(rawPath, window.location.origin);
+		if (parsedUrl.origin !== window.location.origin) return "";
+
+		const pathWithSearch = `${parsedUrl.pathname}${parsedUrl.search}`;
+		if (!pathWithSearch.startsWith("/")) return "";
+		if (pathWithSearch.startsWith("/layout-editor")) return "";
+
+		return pathWithSearch;
+	} catch {
+		return "";
+	}
+}
+
+function parseLayoutEditorInitialState() {
+	const params = new URLSearchParams(window.location.search);
+	const returnTo = normalizeReturnPath(firstNonEmpty(params.get("returnTo"), params.get("from")));
+	const sections = parseSectionsValue(firstNonEmpty(params.get("sections"), params.get("layoutSections"), params.get("sectionOrder")));
+	const isEditMode = params.get("mode") === "edit" || params.get("isEdit") === "1" || params.has("layoutId") || sections.length > 0;
+
+	return {
+		storeName: firstNonEmpty(params.get("storeName"), params.get("store"), params.get("store_name")),
+		cityName: firstNonEmpty(params.get("cityName"), params.get("city"), params.get("city_name")),
+		sections,
+		layoutId: firstNonEmpty(params.get("layoutId"), params.get("id")),
+		isEditMode,
+		returnTo,
+	};
+}
 
 const SECTION_LABEL_BY_SLUG = {
 	"frukt-gront": "Frukt & Grönt",
@@ -287,64 +376,98 @@ function updateDropTargetState(list, targetCard, draggedCard) {
 	setPendingDropTarget(list, targetCard);
 }
 
-// Startar mus-drag och initierar drag-state.
-function handleCardDragStart(event) {
+// Startar mus-drag med custom mousedown-logik för full kontroll över visuell feedback.
+function handleCardMouseDown(event) {
 	const card = event.target.closest(DND_CARD_SELECTOR);
 	if (!isDraggableCard(card)) return;
-	if (!isWholeCardMouseDragEnabled() && !isDragHandleTarget(event.target)) {
-		event.preventDefault();
-		return;
-	}
+	if (!isWholeCardMouseDragEnabled() && !isDragHandleTarget(event.target)) return;
 
+	event.preventDefault();
 	mouseDraggedCard = card;
 	card.classList.add("is-dragging");
 	clearDropMarker();
 	clearPendingDropTarget();
 
-	event.dataTransfer.effectAllowed = "move";
-	event.dataTransfer.setData("text/plain", card.dataset.sectionName || "");
-}
+	// Bygg proxy-element för visuell feedback under drag (gäller alla drag-scenarion)
+	mouseDragProxy = document.createElement("li");
+	mouseDragProxy.className = "layout-editor-section-card is-hovering-to-active";
+	const icon = card.querySelector(".layout-editor-category-icon");
+	const label = card.querySelector(".layout-editor-category-name");
+	const dragHandle = card.querySelector(".layout-editor-drag-handle");
+	if (icon) mouseDragProxy.appendChild(icon.cloneNode(true));
+	if (label) mouseDragProxy.appendChild(label.cloneNode(true));
+	if (dragHandle) mouseDragProxy.appendChild(dragHandle.cloneNode(true));
 
-// Avslutar mus-drag och städar drag-state.
-function handleCardDragEnd(event) {
-	const card = event.target.closest(DND_CARD_SELECTOR);
-	if (!card) return;
-	card.classList.remove("is-dragging");
-	mouseDraggedCard = null;
-	clearDropMarker();
-	clearPendingDropTarget();
-}
+	const cardRect = card.getBoundingClientRect();
+	mouseDragProxy.style.width = cardRect.width + "px";
 
-// Hanterar drag-over för mus och uppdaterar aktuell drop-position.
-function handleListDragOver(event) {
-	const list = event.currentTarget;
-	const draggedCard = mouseDraggedCard;
-
-	if (!isDraggableCard(draggedCard)) return;
-	if (isInactiveList(list) && draggedCard.parentElement === list) return;
-
-	event.preventDefault();
-	const targetCard = isInactiveList(list) ? null : getDropTargetCard(list, event.clientY, draggedCard);
-	updateDropTargetState(list, targetCard, draggedCard);
-}
-
-// Hanterar släpp med mus och committar vald position.
-function handleListDrop(event) {
-	const list = event.currentTarget;
-	const draggedCard = mouseDraggedCard;
-
-	if (!isDraggableCard(draggedCard)) return;
-
-	event.preventDefault();
-
-	// Använd den senast beräknade drop-target från dragover när den finns,
-	// eftersom drop-eventets koordinater kan vara opålitliga i vissa desktop-lägen.
-	if (pendingDropTargetList !== list) {
-		const targetCard = isInactiveList(list) ? null : getDropTargetCard(list, event.clientY, draggedCard);
-		updateDropTargetState(list, targetCard, draggedCard);
+	if (dragHandle) {
+		const handleRect = dragHandle.getBoundingClientRect();
+		mouseDragProxyOffsetX = (handleRect.left + handleRect.width / 2) - cardRect.left;
+		mouseDragProxyOffsetY = (handleRect.top + handleRect.height / 2) - cardRect.top;
+	} else {
+		mouseDragProxyOffsetX = cardRect.width - 24;
+		mouseDragProxyOffsetY = cardRect.height / 2;
 	}
 
-	commitPendingDrop(draggedCard);
+	mouseDragProxy.style.left = (event.clientX - mouseDragProxyOffsetX) + "px";
+	mouseDragProxy.style.top = (event.clientY - mouseDragProxyOffsetY) + "px";
+	document.body.appendChild(mouseDragProxy);
+}
+
+// Hanterar rörelser under mus-drag och uppdaterar proxy-position samt drop-mål.
+function handleDocumentMouseMove(event) {
+	if (!isDraggableCard(mouseDraggedCard)) return;
+
+	if (mouseDragProxy) {
+		mouseDragProxy.style.left = (event.clientX - mouseDragProxyOffsetX) + "px";
+		mouseDragProxy.style.top = (event.clientY - mouseDragProxyOffsetY) + "px";
+	}
+
+	currentMouseAutoScrollStep = getMouseAutoScrollDelta(event.clientY);
+	startMouseAutoScroll();
+
+	const targetList = getListFromPoint(event.clientX, event.clientY);
+	if (!targetList) return;
+	if (isInactiveList(targetList) && mouseDraggedCard.parentElement === targetList) return;
+
+	const targetCard = isInactiveList(targetList) ? null : getDropTargetCard(targetList, event.clientY, mouseDraggedCard);
+	updateDropTargetState(targetList, targetCard, mouseDraggedCard);
+}
+
+// Avslutar mus-drag och committar vald position om släpp sker i giltig lista.
+function handleDocumentMouseUp(event) {
+	if (!isDraggableCard(mouseDraggedCard)) {
+		endMouseDragging();
+		return;
+	}
+
+	const targetList = getListFromPoint(event.clientX, event.clientY);
+	if (targetList && !(isInactiveList(targetList) && mouseDraggedCard.parentElement === targetList)) {
+		const targetCard = isInactiveList(targetList) ? null : getDropTargetCard(targetList, event.clientY, mouseDraggedCard);
+		updateDropTargetState(targetList, targetCard, mouseDraggedCard);
+	}
+
+	commitPendingDrop(mouseDraggedCard);
+	syncSaveButtonState();
+	endMouseDragging();
+}
+
+// Städar upp efter mus-drag och återställer state.
+function endMouseDragging() {
+	if (mouseDraggedCard) {
+		mouseDraggedCard.classList.remove("is-dragging");
+		mouseDraggedCard = null;
+	}
+
+	if (mouseDragProxy) {
+		mouseDragProxy.remove();
+		mouseDragProxy = null;
+	}
+
+	stopMouseAutoScroll();
+	clearDropMarker();
+	clearPendingDropTarget();
 }
 
 // Returnerar den lista som ligger under given skärmposition.
@@ -359,17 +482,44 @@ function setTouchDragScrollLock(isLocked) {
 	document.body.classList.toggle("layout-editor-touch-dragging", Boolean(isLocked));
 }
 
+function getPageScroller() {
+	return document.scrollingElement || document.documentElement;
+}
+
+function applyInstantPageScroll(deltaY) {
+	if (!deltaY) return;
+
+	const beforeScrollY = window.scrollY;
+	window.scrollBy({ top: deltaY, behavior: "instant" });
+
+	if (window.scrollY === beforeScrollY) {
+		const scroller = getPageScroller();
+		scroller.scrollTop += deltaY;
+	}
+}
+
 // Beräknar autoscroll-hastighet nära viewportens kanter.
 function getTouchAutoScrollDelta(pointerY) {
+	const scaleDelta = (intensity, direction) => {
+		const clampedIntensity = Math.min(Math.max(intensity, 0), 1);
+		const step = (TOUCH_AUTO_SCROLL_MIN_STEP + (TOUCH_AUTO_SCROLL_MAX_STEP - TOUCH_AUTO_SCROLL_MIN_STEP) * clampedIntensity) * TOUCH_AUTO_SCROLL_SPEED_MULTIPLIER;
+		return direction * Math.round(step);
+	};
+
+	// Om vi drar från inaktiv-listan, tillåt endast scroll uppåt
+	const isDraggingFromInactive = touchDraggedCard && isInactiveList(touchDraggedCard.parentElement);
+
 	if (pointerY < TOUCH_AUTO_SCROLL_EDGE_PX) {
 		const intensity = (TOUCH_AUTO_SCROLL_EDGE_PX - pointerY) / TOUCH_AUTO_SCROLL_EDGE_PX;
-		return -Math.ceil(intensity * TOUCH_AUTO_SCROLL_MAX_STEP);
+		return scaleDelta(intensity, -1);
 	}
 
-	const bottomEdgeStart = window.innerHeight - TOUCH_AUTO_SCROLL_EDGE_PX;
-	if (pointerY > bottomEdgeStart) {
-		const intensity = (pointerY - bottomEdgeStart) / TOUCH_AUTO_SCROLL_EDGE_PX;
-		return Math.ceil(intensity * TOUCH_AUTO_SCROLL_MAX_STEP);
+	if (!isDraggingFromInactive) {
+		const bottomEdgeStart = window.innerHeight - TOUCH_AUTO_SCROLL_EDGE_PX;
+		if (pointerY > bottomEdgeStart) {
+			const intensity = (pointerY - bottomEdgeStart) / TOUCH_AUTO_SCROLL_EDGE_PX;
+			return scaleDelta(intensity, 1);
+		}
 	}
 
 	return 0;
@@ -389,31 +539,78 @@ function updateTouchDropTarget(pointerX, pointerY) {
 
 // Stoppar aktiv auto-scroll-loop för touch-drag.
 function stopTouchAutoScroll() {
-	if (!touchAutoScrollFrameId) return;
-	cancelAnimationFrame(touchAutoScrollFrameId);
-	touchAutoScrollFrameId = null;
+	if (touchAutoScrollIntervalId) {
+		clearInterval(touchAutoScrollIntervalId);
+		touchAutoScrollIntervalId = null;
+	}
+
+	currentTouchAutoScrollStep = 0;
 }
 
 // Kör auto-scroll-loop under touch-drag.
-function runTouchAutoScrollLoop() {
+function runTouchAutoScrollTick() {
 	if (!isDraggableCard(touchDraggedCard)) {
 		stopTouchAutoScroll();
 		return;
 	}
 
-	const delta = getTouchAutoScrollDelta(touchClientY);
-	if (delta !== 0) {
-		window.scrollBy(0, delta);
-		updateTouchDropTarget(touchClientX, touchClientY);
-	}
+	if (currentTouchAutoScrollStep === 0) return;
 
-	touchAutoScrollFrameId = requestAnimationFrame(runTouchAutoScrollLoop);
+	applyInstantPageScroll(currentTouchAutoScrollStep);
+	updateTouchDropTarget(touchClientX, touchClientY);
 }
 
 // Startar auto-scroll-loop om den inte redan kör.
 function startTouchAutoScroll() {
-	if (touchAutoScrollFrameId) return;
-	touchAutoScrollFrameId = requestAnimationFrame(runTouchAutoScrollLoop);
+	if (touchAutoScrollIntervalId) return;
+	touchAutoScrollIntervalId = setInterval(runTouchAutoScrollTick, TOUCH_AUTO_SCROLL_INTERVAL_MS);
+}
+
+// Beräknar auto-scroll-hastighet för mus-drag (båda riktningar tillåtna).
+function getMouseAutoScrollDelta(pointerY) {
+	const scaleDelta = (intensity, direction) => {
+		const clampedIntensity = Math.min(Math.max(intensity, 0), 1);
+		const step = (TOUCH_AUTO_SCROLL_MIN_STEP + (TOUCH_AUTO_SCROLL_MAX_STEP - TOUCH_AUTO_SCROLL_MIN_STEP) * clampedIntensity) * TOUCH_AUTO_SCROLL_SPEED_MULTIPLIER;
+		return direction * Math.round(step);
+	};
+
+	if (pointerY < TOUCH_AUTO_SCROLL_EDGE_PX) {
+		const intensity = (TOUCH_AUTO_SCROLL_EDGE_PX - pointerY) / TOUCH_AUTO_SCROLL_EDGE_PX;
+		return scaleDelta(intensity, -1);
+	}
+
+	const bottomEdgeStart = window.innerHeight - TOUCH_AUTO_SCROLL_EDGE_PX;
+	if (pointerY > bottomEdgeStart) {
+		const intensity = (pointerY - bottomEdgeStart) / TOUCH_AUTO_SCROLL_EDGE_PX;
+		return scaleDelta(intensity, 1);
+	}
+
+	return 0;
+}
+
+// Stoppar aktiv auto-scroll-loop för mus-drag.
+function stopMouseAutoScroll() {
+	if (mouseAutoScrollIntervalId) {
+		clearInterval(mouseAutoScrollIntervalId);
+		mouseAutoScrollIntervalId = null;
+	}
+	currentMouseAutoScrollStep = 0;
+}
+
+// Kör auto-scroll-tick under mus-drag.
+function runMouseAutoScrollTick() {
+	if (!isDraggableCard(mouseDraggedCard)) {
+		stopMouseAutoScroll();
+		return;
+	}
+	if (currentMouseAutoScrollStep === 0) return;
+	applyInstantPageScroll(currentMouseAutoScrollStep);
+}
+
+// Startar auto-scroll-loop för mus-drag om den inte redan kör.
+function startMouseAutoScroll() {
+	if (mouseAutoScrollIntervalId) return;
+	mouseAutoScrollIntervalId = setInterval(runMouseAutoScrollTick, TOUCH_AUTO_SCROLL_INTERVAL_MS);
 }
 
 // Initierar touch-drag när användaren börjar dra ett kort.
@@ -423,19 +620,22 @@ function handleListTouchStart(event) {
 	const card = event.target.closest(DND_CARD_SELECTOR);
 	if (!isDraggableCard(card)) return;
 	event.preventDefault();
-	const touch = event.touches?.[0];
-	if (touch) {
-		touchClientX = touch.clientX;
-		touchClientY = touch.clientY;
-	}
 
+	// Sätt touchDraggedCard först så att getTouchAutoScrollDelta kan identifiera källistan korrekt.
 	touchDraggedCard = card;
 	touchDraggedCard.classList.add("is-dragging");
 	setTouchDragScrollLock(true);
 	clearDropMarker();
 	clearPendingDropTarget();
 
-	startTouchAutoScroll();
+	const touch = event.touches?.[0];
+	if (touch) {
+		touchClientX = touch.clientX;
+		touchClientY = touch.clientY;
+	}
+
+	// Starta INTE auto-scroll här – den aktiveras först när fingret rör sig (touchmove).
+	// Det förhindrar att sidan scrollar aggressivt direkt vid beröring nära skärmkanten.
 }
 
 // Hanterar touch-rörelse under drag och uppdaterar målposition.
@@ -447,18 +647,37 @@ function handleDocumentTouchMove(event) {
 	if (!touch) return;
 	touchClientX = touch.clientX;
 	touchClientY = touch.clientY;
+	currentTouchAutoScrollStep = getTouchAutoScrollDelta(touchClientY);
 	updateTouchDropTarget(touchClientX, touchClientY);
 	startTouchAutoScroll();
+
+	// Visa det flytande proxy-kortet för alla drag-scenarion (oavsett källlista)
+	touchDraggedCard.classList.add("is-hovering-to-active");
+	const dragHandle = touchDraggedCard.querySelector(".layout-editor-drag-handle");
+	const cardRect = dragHandle ? touchDraggedCard.getBoundingClientRect() : null;
+	const handleRect = dragHandle ? dragHandle.getBoundingClientRect() : null;
+	const offsetX = dragHandle
+		? (handleRect.left + handleRect.width / 2) - cardRect.left
+		: touchDraggedCard.offsetWidth - 24;
+	const offsetY = dragHandle
+		? (handleRect.top + handleRect.height / 2) - cardRect.top
+		: touchDraggedCard.offsetHeight / 2;
+	touchDraggedCard.style.left = (touchClientX - offsetX) + "px";
+	touchDraggedCard.style.top = (touchClientY - offsetY) + "px";
 }
 
 // Avslutar touch-drag och återställer temporär state.
 function endTouchDragging() {
 	if (!touchDraggedCard) return;
 	commitPendingDrop(touchDraggedCard);
-	touchDraggedCard.classList.remove("is-dragging");
+	syncSaveButtonState();
+	touchDraggedCard.classList.remove("is-dragging", "is-hovering-to-active");
+	touchDraggedCard.style.left = "";
+	touchDraggedCard.style.top = "";
 	touchDraggedCard = null;
 	touchClientX = 0;
 	touchClientY = 0;
+	currentTouchAutoScrollStep = 0;
 	clearDropMarker();
 	clearPendingDropTarget();
 	setTouchDragScrollLock(false);
@@ -488,24 +707,28 @@ function setupTouchDragAndDrop() {
 	document.addEventListener("touchcancel", endTouchDragging, { signal: pageLifecycleAbortController.signal });
 }
 
-// Binder mus-baserad drag-and-drop till en lista en gång.
-function bindDragAndDropToList(list) {
-	if (!list || list.dataset.dndBound === "true") return;
+// Binder mus-baserad drag-and-drop till en lista en gång (mousedown-baserat system).
+function bindMouseDragAndDropToList(list) {
+	if (!list || list.dataset.mouseDndBound === "true") return;
 
-	list.dataset.dndBound = "true";
-	list.addEventListener("dragstart", handleCardDragStart);
-	list.addEventListener("dragend", handleCardDragEnd);
-	list.addEventListener("dragover", handleListDragOver);
-	list.addEventListener("drop", handleListDrop);
+	list.dataset.mouseDndBound = "true";
+	list.addEventListener("mousedown", handleCardMouseDown);
+	// Förhindra webbläsarens inbyggda HTML5-drag som skulle störa custom-systemet
+	list.addEventListener("dragstart", (e) => e.preventDefault());
 }
 
 // Sätter upp all mus-baserad drag-and-drop för sidan.
-function setupDragAndDrop() {
+function setupMouseDragAndDrop() {
 	const activeList = document.querySelector("#layout-editor-active-list");
 	const inactiveList = document.querySelector("#layout-editor-inactive-list");
 
-	bindDragAndDropToList(activeList);
-	bindDragAndDropToList(inactiveList);
+	bindMouseDragAndDropToList(activeList);
+	bindMouseDragAndDropToList(inactiveList);
+
+	if (!pageLifecycleAbortController) return;
+
+	document.addEventListener("mousemove", handleDocumentMouseMove, { signal: pageLifecycleAbortController.signal });
+	document.addEventListener("mouseup", handleDocumentMouseUp, { signal: pageLifecycleAbortController.signal });
 }
 
 // Skapar ett kategorikort med DOM-API för att undvika HTML-injektion.
@@ -532,7 +755,6 @@ function createCategoryCardElement(slug) {
 	dragHandle.className = "layout-editor-drag-handle";
 	dragHandle.setAttribute("aria-label", "Dra för att flytta sektionen");
 	dragHandle.setAttribute("title", "Dra för att flytta sektionen");
-	dragHandle.setAttribute("draggable", "true");
 
 	card.append(icon, label, dragHandle);
 
@@ -553,7 +775,7 @@ function renderInactiveListState(container, message) {
 // Hämtar kategorier och renderar dem i inaktiv-listan.
 async function populateInactiveSectionList() {
 	const inactiveList = document.querySelector("#layout-editor-inactive-list");
-	if (!inactiveList) return;
+	if (!inactiveList) return [];
 
 	renderInactiveListState(inactiveList, "Hämtar kategorier...");
 
@@ -562,14 +784,480 @@ async function populateInactiveSectionList() {
 
 		if (!Array.isArray(categorySlugs) || categorySlugs.length === 0) {
 			renderInactiveListState(inactiveList, "Inga sektioner hittades.");
-			return;
+			return [];
 		}
 
 		renderCategoryCards(inactiveList, categorySlugs);
+		return categorySlugs;
 	} catch (error) {
 		console.warn("Category fetch failed:", error);
 		renderInactiveListState(inactiveList, "Kunde inte hämta sektioner.");
+		return [];
 	}
+}
+
+function getActiveSectionSlugs() {
+	const activeList = document.querySelector("#layout-editor-active-list");
+	if (!activeList) return [];
+
+	return Array.from(activeList.querySelectorAll(DND_CARD_SELECTOR))
+		.map((card) => normalizeSectionSlug(card.dataset.sectionName))
+		.filter(Boolean);
+}
+
+function getLayoutEditorFormState() {
+	const storeNameInput = document.querySelector("#layout-editor-store-name");
+	const cityNameInput = document.querySelector("#layout-editor-city-name");
+
+	return {
+		storeName: firstNonEmpty(storeNameInput?.value),
+		cityName: firstNonEmpty(cityNameInput?.value),
+		sections: getActiveSectionSlugs(),
+	};
+}
+
+function buildFormFingerprint(formState) {
+	const normalizedStoreName = firstNonEmpty(formState?.storeName).toLowerCase();
+	const normalizedCityName = firstNonEmpty(formState?.cityName).toLowerCase();
+	const normalizedSections = Array.isArray(formState?.sections) ? formState.sections.join("|") : "";
+
+	return `${normalizedStoreName}::${normalizedCityName}::${normalizedSections}`;
+}
+
+function captureEditModeBaseline(formState) {
+	editModeBaselineFingerprint = buildFormFingerprint(formState);
+}
+
+function clearEditModeBaseline() {
+	editModeBaselineFingerprint = "";
+}
+
+function setLayoutEditorMessage(message, tone = "info") {
+	const messageElement = document.querySelector("#layout-editor-message");
+	if (!messageElement) return;
+
+	messageElement.textContent = String(message || "");
+	messageElement.dataset.tone = tone;
+}
+
+function setActionButtonsDisabled(isDisabled) {
+	const saveButton = document.querySelector("#layout-editor-save-button");
+	const cancelButton = document.querySelector("#layout-editor-cancel-button");
+
+	if (saveButton) saveButton.disabled = Boolean(isDisabled);
+	if (cancelButton) cancelButton.disabled = Boolean(isDisabled);
+}
+
+function setSaveButtonSuccessState(isSuccess) {
+	const saveButton = document.querySelector("#layout-editor-save-button");
+	if (!saveButton) return;
+
+	saveButton.classList.toggle("layout-editor-save-button-success", Boolean(isSuccess));
+}
+
+function clearExistingLayoutCheckTimeout() {
+	if (!existingLayoutCheckTimeoutId) return;
+	clearTimeout(existingLayoutCheckTimeoutId);
+	existingLayoutCheckTimeoutId = null;
+}
+
+function getExistingLayoutPromptRoot() {
+	return document.querySelector(`#${EXISTING_LAYOUT_PROMPT_ID}`);
+}
+
+function ensureExistingLayoutPromptElements() {
+	const cityGroup = document.querySelector("#layout-editor-city-name-group");
+	if (!cityGroup) return null;
+
+	let promptRoot = getExistingLayoutPromptRoot();
+	if (promptRoot) return promptRoot;
+
+	promptRoot = document.createElement("div");
+	promptRoot.id = EXISTING_LAYOUT_PROMPT_ID;
+	promptRoot.className = "layout-editor-existing-layout-prompt";
+	promptRoot.hidden = true;
+
+	const message = document.createElement("p");
+	message.id = EXISTING_LAYOUT_PROMPT_MESSAGE_ID;
+	message.textContent = "Du har redan skapat en layout för denna butiken, Vill du ändra den?";
+
+	const actions = document.createElement("div");
+	actions.className = "layout-editor-existing-layout-actions";
+
+	const yesButton = document.createElement("button");
+	yesButton.type = "button";
+	yesButton.id = EXISTING_LAYOUT_PROMPT_YES_ID;
+	yesButton.className = "btn btn-primary";
+	yesButton.textContent = "Ja";
+
+	const noButton = document.createElement("button");
+	noButton.type = "button";
+	noButton.id = EXISTING_LAYOUT_PROMPT_NO_ID;
+	noButton.className = "btn btn-secondary";
+	noButton.textContent = "Nej";
+
+	actions.append(yesButton, noButton);
+	promptRoot.append(message, actions);
+	cityGroup.appendChild(promptRoot);
+
+	return promptRoot;
+}
+
+function showExistingLayoutPrompt() {
+	const promptRoot = ensureExistingLayoutPromptElements();
+	if (!promptRoot) return;
+	promptRoot.hidden = false;
+}
+
+function hideExistingLayoutPrompt() {
+	const promptRoot = getExistingLayoutPromptRoot();
+	if (!promptRoot) return;
+	promptRoot.hidden = true;
+}
+
+function clearExistingLayoutConflictState() {
+	existingLayoutConflict = null;
+	hideExistingLayoutPrompt();
+}
+
+function syncSaveButtonState() {
+	const saveButton = document.querySelector("#layout-editor-save-button");
+	if (!saveButton) return;
+
+	const formState = getLayoutEditorFormState();
+	const hasNoSections = !Array.isArray(formState.sections) || formState.sections.length === 0;
+	const hasExistingLayoutConflict = Boolean(existingLayoutConflict);
+	const hasNoEditChanges = Boolean(editModeBaselineFingerprint) && buildFormFingerprint(formState) === editModeBaselineFingerprint;
+
+	const shouldShow = !saveActionIsPending && !hasNoSections && !hasExistingLayoutConflict && !hasNoEditChanges;
+	saveButton.classList.toggle("is-visible", shouldShow);
+	saveButton.disabled = !shouldShow;
+	saveButton.title = "";
+}
+
+function bindSaveEligibilitySync() {
+	if (!pageLifecycleAbortController) return;
+
+	const storeNameInput = document.querySelector("#layout-editor-store-name");
+	const cityNameInput = document.querySelector("#layout-editor-city-name");
+	const activeList = document.querySelector("#layout-editor-active-list");
+
+	storeNameInput?.addEventListener("input", syncSaveButtonState, { signal: pageLifecycleAbortController.signal });
+	cityNameInput?.addEventListener("input", syncSaveButtonState, { signal: pageLifecycleAbortController.signal });
+
+	if (!activeList) return;
+
+	if (activeListMutationObserver) {
+		activeListMutationObserver.disconnect();
+		activeListMutationObserver = null;
+	}
+
+	clearExistingLayoutCheckTimeout();
+	existingLayoutConflict = null;
+	existingLayoutCheckRequestId = 0;
+
+	activeListMutationObserver = new MutationObserver(() => {
+		syncSaveButtonState();
+	});
+
+	activeListMutationObserver.observe(activeList, { childList: true });
+}
+
+function applySectionOrderToActiveList(sectionSlugs) {
+	const activeList = document.querySelector("#layout-editor-active-list");
+	const inactiveList = document.querySelector("#layout-editor-inactive-list");
+	if (!activeList || !inactiveList) return;
+
+	for (const card of Array.from(activeList.querySelectorAll(DND_CARD_SELECTOR))) {
+		inactiveList.appendChild(card);
+	}
+
+	applyInitialSectionOrder(sectionSlugs);
+}
+
+async function loadExistingLayoutIntoEditor(initialState, conflictState) {
+	const storeNameInput = document.querySelector("#layout-editor-store-name");
+	const cityNameInput = document.querySelector("#layout-editor-city-name");
+	const saveButton = document.querySelector("#layout-editor-save-button");
+	const heading = document.querySelector("#layout-editor-heading-group h1");
+
+	if (storeNameInput) storeNameInput.value = conflictState.storeName || "";
+	if (cityNameInput) cityNameInput.value = conflictState.cityName || "";
+
+	initialState.layoutId = conflictState.layoutId;
+	initialState.isEditMode = true;
+	if (saveButton) saveButton.textContent = "Uppdatera";
+	if (heading) heading.textContent = "Uppdatera butikslayout";
+
+	if (Array.isArray(conflictState.sectionSlugs)) {
+		applySectionOrderToActiveList(conflictState.sectionSlugs);
+	}
+
+	captureEditModeBaseline({
+		storeName: conflictState.storeName,
+		cityName: conflictState.cityName,
+		sections: Array.isArray(conflictState.sectionSlugs) ? conflictState.sectionSlugs : [],
+	});
+
+	clearExistingLayoutConflictState();
+	syncSaveButtonState();
+	setLayoutEditorMessage("", "info");
+}
+
+function handleExistingLayoutPromptNo() {
+	const storeNameInput = document.querySelector("#layout-editor-store-name");
+	const cityNameInput = document.querySelector("#layout-editor-city-name");
+
+	clearExistingLayoutConflictState();
+
+	if (storeNameInput) {
+		storeNameInput.value = "";
+		storeNameInput.focus();
+	}
+
+	if (cityNameInput) {
+		cityNameInput.value = "";
+	}
+
+	syncSaveButtonState();
+	setLayoutEditorMessage("", "info");
+}
+
+async function checkExistingLayoutForStoreCity(initialState) {
+	if (initialState.isEditMode) {
+		clearExistingLayoutConflictState();
+		syncSaveButtonState();
+		return;
+	}
+
+	const storeNameInput = document.querySelector("#layout-editor-store-name");
+	const cityNameInput = document.querySelector("#layout-editor-city-name");
+	const storeName = firstNonEmpty(storeNameInput?.value);
+	const cityName = firstNonEmpty(cityNameInput?.value);
+
+	if (!storeName || !cityName) {
+		clearExistingLayoutConflictState();
+		syncSaveButtonState();
+		return;
+	}
+
+	const requestId = ++existingLayoutCheckRequestId;
+
+	try {
+		const existingLayout = await findMyLayoutByStoreAndCity({ storeName, cityName });
+		if (requestId !== existingLayoutCheckRequestId) return;
+
+		if (!existingLayout || existingLayout.layoutId === initialState.layoutId) {
+			clearExistingLayoutConflictState();
+			syncSaveButtonState();
+			return;
+		}
+
+		existingLayoutConflict = existingLayout;
+		showExistingLayoutPrompt();
+		syncSaveButtonState();
+	} catch (error) {
+		if (requestId !== existingLayoutCheckRequestId) return;
+		clearExistingLayoutConflictState();
+		syncSaveButtonState();
+		setLayoutEditorMessage(error?.message || "Kunde inte kontrollera befintlig butikslayout just nu.", "warning");
+	}
+}
+
+function scheduleExistingLayoutCheck(initialState) {
+	clearExistingLayoutCheckTimeout();
+	existingLayoutCheckTimeoutId = setTimeout(() => {
+		existingLayoutCheckTimeoutId = null;
+		void checkExistingLayoutForStoreCity(initialState);
+	}, EXISTING_LAYOUT_CHECK_DEBOUNCE_MS);
+}
+
+function bindExistingLayoutConflictControls(initialState) {
+	if (!pageLifecycleAbortController) return;
+
+	const storeNameInput = document.querySelector("#layout-editor-store-name");
+	const cityNameInput = document.querySelector("#layout-editor-city-name");
+	const promptRoot = ensureExistingLayoutPromptElements();
+	if (!storeNameInput || !cityNameInput || !promptRoot) return;
+
+	const yesButton = promptRoot.querySelector(`#${EXISTING_LAYOUT_PROMPT_YES_ID}`);
+	const noButton = promptRoot.querySelector(`#${EXISTING_LAYOUT_PROMPT_NO_ID}`);
+
+	storeNameInput.addEventListener("input", () => {
+		clearExistingLayoutConflictState();
+		syncSaveButtonState();
+		scheduleExistingLayoutCheck(initialState);
+	}, { signal: pageLifecycleAbortController.signal });
+
+	cityNameInput.addEventListener("input", () => {
+		clearExistingLayoutConflictState();
+		syncSaveButtonState();
+		scheduleExistingLayoutCheck(initialState);
+	}, { signal: pageLifecycleAbortController.signal });
+
+	storeNameInput.addEventListener("blur", () => {
+		scheduleExistingLayoutCheck(initialState);
+	}, { signal: pageLifecycleAbortController.signal });
+
+	cityNameInput.addEventListener("blur", () => {
+		scheduleExistingLayoutCheck(initialState);
+	}, { signal: pageLifecycleAbortController.signal });
+
+	yesButton?.addEventListener("click", () => {
+		if (!existingLayoutConflict) return;
+		void loadExistingLayoutIntoEditor(initialState, existingLayoutConflict);
+	}, { signal: pageLifecycleAbortController.signal });
+
+	noButton?.addEventListener("click", () => {
+		handleExistingLayoutPromptNo();
+	}, { signal: pageLifecycleAbortController.signal });
+}
+
+function applyInitialStoreFields(initialState) {
+	const storeNameInput = document.querySelector("#layout-editor-store-name");
+	const cityNameInput = document.querySelector("#layout-editor-city-name");
+	const saveButton = document.querySelector("#layout-editor-save-button");
+	const heading = document.querySelector("#layout-editor-heading-group h1");
+
+	if (storeNameInput && initialState.storeName) {
+		storeNameInput.value = initialState.storeName;
+	}
+
+	if (cityNameInput && initialState.cityName) {
+		cityNameInput.value = initialState.cityName;
+	}
+
+	if (saveButton && initialState.isEditMode) {
+		saveButton.textContent = "Uppdatera";
+	}
+
+	if (heading && initialState.isEditMode) {
+		heading.textContent = "Uppdatera butikslayout";
+	}
+}
+
+function applyInitialSectionOrder(sectionSlugs) {
+	if (!Array.isArray(sectionSlugs) || sectionSlugs.length === 0) return;
+
+	const activeList = document.querySelector("#layout-editor-active-list");
+	const inactiveList = document.querySelector("#layout-editor-inactive-list");
+	if (!activeList || !inactiveList) return;
+
+	for (const rawSlug of sectionSlugs) {
+		const slug = normalizeSectionSlug(rawSlug);
+		if (!slug) continue;
+
+		const selector = `${DND_CARD_SELECTOR}[data-section-name="${slug}"]`;
+		const existingCard = document.querySelector(selector);
+		const cardToMove = existingCard || createCategoryCardElement(slug);
+		if (!cardToMove) continue;
+
+		activeList.appendChild(cardToMove);
+	}
+}
+
+function validateLayoutEditorSave(formState) {
+	if (!formState.storeName) {
+		return "Fyll i butiksnamn innan du sparar.";
+	}
+
+	if (!formState.cityName) {
+		return "Fyll i stad innan du sparar.";
+	}
+
+	if (!Array.isArray(formState.sections) || formState.sections.length === 0) {
+		return "Lägg till minst en sektion i Valda sektioner innan du sparar.";
+	}
+
+	return "";
+}
+
+function navigateOnCancel(initialState) {
+	const returnPath = normalizeReturnPath(initialState.returnTo);
+	if (returnPath) {
+		navigateTo(returnPath);
+		return;
+	}
+
+	if (window.history.length > 1) {
+		window.history.back();
+		return;
+	}
+
+	navigateTo(DEFAULT_CANCEL_PATH);
+}
+
+async function handleSaveButtonClick(initialState) {
+	const formState = getLayoutEditorFormState();
+	const validationError = validateLayoutEditorSave(formState);
+
+	if (validationError) {
+		setLayoutEditorMessage(validationError, "error");
+		syncSaveButtonState();
+		return;
+	}
+
+	saveActionIsPending = true;
+	setSaveButtonSuccessState(false);
+	syncSaveButtonState();
+	setActionButtonsDisabled(true);
+	setLayoutEditorMessage(initialState.isEditMode ? "Uppdaterar butikslayout..." : "Sparar butikslayout...", "info");
+
+	try {
+		const result = await saveStoreLayout({
+			layoutId: initialState.layoutId || "",
+			storeName: formState.storeName,
+			cityName: formState.cityName,
+			sectionSlugs: formState.sections,
+		});
+
+		initialState.layoutId = result.layoutId;
+		initialState.isEditMode = true;
+		captureEditModeBaseline(formState);
+		setSaveButtonSuccessState(true);
+		setLayoutEditorMessage(result.mode === "created" ? "Butikslayout sparad." : "Butikslayout uppdaterad.", "success");
+
+		window.setTimeout(() => {
+			navigateOnCancel(initialState);
+		}, SAVE_SUCCESS_REDIRECT_DELAY_MS);
+	} catch (error) {
+		setSaveButtonSuccessState(false);
+		setLayoutEditorMessage(error?.message || "Kunde inte spara butikslayouten.", "error");
+	} finally {
+		saveActionIsPending = false;
+		setActionButtonsDisabled(false);
+		syncSaveButtonState();
+	}
+}
+
+function bindLayoutEditorActions(initialState) {
+	if (!pageLifecycleAbortController) return;
+
+	const saveButton = document.querySelector("#layout-editor-save-button");
+	const cancelButton = document.querySelector("#layout-editor-cancel-button");
+	if (!saveButton || !cancelButton) return;
+
+	saveButton.addEventListener("click", () => {
+		void handleSaveButtonClick(initialState);
+	}, { signal: pageLifecycleAbortController.signal });
+
+	cancelButton.addEventListener("click", () => {
+		navigateOnCancel(initialState);
+	}, { signal: pageLifecycleAbortController.signal });
+}
+
+async function initializeLayoutEditorData(initialState) {
+	applyInitialStoreFields(initialState);
+	await populateInactiveSectionList();
+	applyInitialSectionOrder(initialState.sections);
+
+	if (initialState.isEditMode) {
+		captureEditModeBaseline(getLayoutEditorFormState());
+	} else {
+		clearEditModeBaseline();
+	}
+
+	syncSaveButtonState();
 }
 
 // Returnerar true om layout-editor-sidan finns monterad i DOM.
@@ -584,7 +1272,13 @@ function teardownLayoutEditorPage() {
 		pageLifecycleAbortController = null;
 	}
 
+	if (activeListMutationObserver) {
+		activeListMutationObserver.disconnect();
+		activeListMutationObserver = null;
+	}
+
 	stopTouchAutoScroll();
+	stopMouseAutoScroll();
 	clearDropMarker();
 	clearPendingDropTarget();
 	setTouchDragScrollLock(false);
@@ -593,14 +1287,23 @@ function teardownLayoutEditorPage() {
 		mouseDraggedCard.classList.remove("is-dragging");
 	}
 
+	if (mouseDragProxy) {
+		mouseDragProxy.remove();
+		mouseDragProxy = null;
+	}
+
 	if (touchDraggedCard) {
-		touchDraggedCard.classList.remove("is-dragging");
+		touchDraggedCard.classList.remove("is-dragging", "is-hovering-to-active");
+		touchDraggedCard.style.left = "";
+		touchDraggedCard.style.top = "";
 	}
 
 	mouseDraggedCard = null;
 	touchDraggedCard = null;
 	touchClientX = 0;
 	touchClientY = 0;
+	saveActionIsPending = false;
+	clearEditModeBaseline();
 }
 
 // Initierar hela layout-editorns interaktion och datahämtning.
@@ -612,12 +1315,16 @@ export function setupLayoutEditorPage() {
 	}
 
 	pageLifecycleAbortController = new AbortController();
+	const initialState = parseLayoutEditorInitialState();
 
 	syncInstructionsByViewport();
 	bindInstructionsViewportSync();
-	setupDragAndDrop();
+	setupMouseDragAndDrop();
 	setupTouchDragAndDrop();
-	void populateInactiveSectionList();
+	bindSaveEligibilitySync();
+	bindExistingLayoutConflictControls(initialState);
+	bindLayoutEditorActions(initialState);
+	void initializeLayoutEditorData(initialState);
 }
 
 // Synkar instruktionspanelen med viewport så desktop alltid visar innehållet.
