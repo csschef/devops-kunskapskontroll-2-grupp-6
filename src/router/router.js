@@ -1,6 +1,27 @@
 import { resolveRoute } from "./routes.js";
 import { getCurrentSession } from "../auth-service.js";
 
+function applyLayoutEditorPrefillFromQuery(pathname) {
+  if (!/^\/layout-editor($|\/)/.test(pathname)) {
+    return;
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const storeName = searchParams.get("storeName") ?? "";
+  const city = searchParams.get("city") ?? "";
+
+  const storeNameInput = document.querySelector("#layout-editor-store-name");
+  const cityInput = document.querySelector("#layout-editor-city-name");
+
+  if (storeNameInput instanceof HTMLInputElement && storeName) {
+    storeNameInput.value = storeName;
+  }
+
+  if (cityInput instanceof HTMLInputElement && city) {
+    cityInput.value = city;
+  }
+}
+
 async function renderCurrentRoute() {
   const app = document.querySelector("#app");
   if (!app) return;
@@ -26,6 +47,7 @@ async function renderCurrentRoute() {
   }
 
   app.innerHTML = route.render(route.path);
+  applyLayoutEditorPrefillFromQuery(currentPath);
 
   if (typeof route.onMount === "function") {
     route.onMount(route.path);

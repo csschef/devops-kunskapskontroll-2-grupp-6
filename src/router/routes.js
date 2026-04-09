@@ -1,7 +1,7 @@
 import { renderHomePage, setupHomePage } from "../pages/home/index.js";
 import { renderCreateListPage } from "../pages/create-list/index.js";
 import { renderLayoutEditorPage } from "../pages/layout-editor/index.js";
-import { renderShoppingListPage } from "../pages/shopping-list/index.js";
+import { renderShoppingListPage } from "../pages/list/index.js";
 import { renderProfilePage, setupProfilePage } from "../pages/profile/index.js";
 import { renderLoginPage, setupLoginPage } from "../pages/login/index.js";
 import { renderRegisterPage, setupRegisterPage } from "../pages/register/index.js";
@@ -24,7 +24,7 @@ export const routes = [
     requiresAuth: true,
   },
   {
-    pattern: /^\/list($|\/)/,
+    pattern: /^\/list\/[^/]+\/?$/,
     render: (path) => renderShoppingListPage(path),
     requiresAuth: true,
   },
