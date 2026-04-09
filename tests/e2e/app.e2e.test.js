@@ -36,3 +36,26 @@ test("layout editor shows update mode from query params when authenticated", asy
 	await expect(page.locator("#layout-editor-save-button")).toHaveText("Uppdatera");
 	await expect(page.locator("#layout-editor-save-button")).toBeDisabled();
 });
+
+// Hampus: create-list route protection + missing list id should redirect home
+test("redirects to login when visiting create-list unauthenticated", async ({ page }) => {
+	await page.goto("/create-list");
+	await expect(page).toHaveURL(/\/login$/);
+	await expect(page.getByRole("heading", { name: "Logga in" })).toBeVisible();
+});
+
+test("non-existing list id should redirect to home", async ({ page }) => {
+	if (!e2eEmail || !e2ePassword) {
+		throw new Error("E2E_EMAIL and E2E_PASSWORD must be set to run list invalid-id e2e test.");
+	}
+
+	await page.goto("/login");
+	await page.fill("#login-email", e2eEmail);
+	await page.fill("#login-password", e2ePassword);
+	await page.click("#login-submit");
+
+	await expect(page).toHaveURL(/\/$/);
+
+	await page.goto("/list/00000000-0000-4000-8000-000000000000");
+	await expect(page).toHaveURL(/\/$/);
+});

@@ -208,8 +208,8 @@ async function ensureStoresLoaded() {
 		}
 
 		updateStoresForSelectedCity();
-	} catch (error) {
-		console.error("Load stores failed", error);
+	} catch {
+		return;
 	} finally {
 		state.isStoresLoading = false;
 		renderTitleAndStore();
@@ -229,8 +229,8 @@ function startPollingFallback() {
 		try {
 			await refreshItemsAndSuggestions({ includeSuggestions: false });
 			renderAll();
-		} catch (error) {
-			console.error("Polling refresh failed", error);
+		} catch {
+			return;
 		}
 	}, POLLING_INTERVAL_MS);
 }
@@ -413,8 +413,7 @@ async function saveTitleEdit() {
 			title: nextTitle,
 		};
 		closeTitleEditor();
-	} catch (error) {
-		console.error("Update title failed", error);
+	} catch {
 		state.isTitleSaving = false;
 		state.titleError = "Kunde inte spara listnamnet. Försök igen.";
 		renderTitleAndStore();
@@ -1318,7 +1317,6 @@ async function refreshSharingData() {
 		}
 
 		state.shareError = "Kunde inte ladda listans medlemmar.";
-		console.error("Load share data failed", error);
 	} finally {
 		state.isShareLoading = false;
 		renderShareManagement();
@@ -1359,7 +1357,6 @@ async function handleShareInviteSubmit() {
 		await refreshSharingData();
 	} catch (error) {
 		state.shareInviteError = mapShareInviteError(error);
-		console.error("Invite member failed", error);
 	} finally {
 		state.isShareInviting = false;
 		renderShareManagement();
@@ -1387,7 +1384,6 @@ async function handleShareMemberRemoval(memberUserId) {
 		await refreshSharingData();
 	} catch (error) {
 		state.shareInviteError = mapShareRemovalError(error);
-		console.error("Remove member failed", error);
 	} finally {
 		state.shareRemovingUserId = "";
 		renderShareManagement();
@@ -1499,12 +1495,10 @@ async function refreshSuggestionsInBackground(expectedLoadVersion = state.listLo
 			(product) => !state.items.some((item) => String(item.product_id) === String(product.id)),
 		);
 		renderSuggestions();
-	} catch (error) {
+	} catch {
 		if (expectedLoadVersion !== state.listLoadVersion) {
 			return;
 		}
-
-		console.error("Refresh suggestions failed", error);
 	}
 }
 
@@ -1562,8 +1556,8 @@ async function handleRealtimeItemChange(payload) {
 		state.list = { ...(state.list ?? {}), items: state.items };
 		renderGroups();
 		queueSuggestionsRefresh();
-	} catch (error) {
-		console.error("Realtime item update failed", error);
+	} catch {
+		return;
 	}
 }
 
@@ -1591,8 +1585,8 @@ async function handleRealtimeListChange() {
 
 		renderAll();
 		queueSuggestionsRefresh();
-	} catch (error) {
-		console.error("Realtime list update failed", error);
+	} catch {
+		return;
 	}
 }
 
@@ -1617,8 +1611,6 @@ function startRealtimeSync(listId) {
 	startPollingFallback();
 
 	const handleRealtimeStatus = (status) => {
-		console.info("[list realtime] status", { listId, status });
-
 		if (status === "SUBSCRIBED") {
 			state.realtimeConnected = true;
 			stopPollingFallback();
@@ -1642,8 +1634,7 @@ function startRealtimeSync(listId) {
 			void handleRealtimeItemChange(payload);
 		},
 		onStatus: handleRealtimeStatus,
-		onError: (error) => {
-			console.error("Realtime item subscription error", error);
+		onError: () => {
 		},
 	});
 
@@ -1652,8 +1643,7 @@ function startRealtimeSync(listId) {
 			void handleRealtimeListChange();
 		},
 		onStatus: handleRealtimeStatus,
-		onError: (error) => {
-			console.error("Realtime list subscription error", error);
+		onError: () => {
 		},
 	});
 }
@@ -1684,10 +1674,7 @@ async function loadListPageData(listId) {
 		}
 
 		if (!list) {
-			state.loadError = "Listan kunde inte hittas.";
-			state.list = null;
-			state.items = [];
-			state.suggestions = [];
+			navigateTo("/", { replace: true });
 			return;
 		}
 
@@ -1729,15 +1716,11 @@ async function loadListPageData(listId) {
 		}
 
 		if (error?.code === LIST_ACCESS_ERROR_CODES.NOT_FOUND) {
-			state.loadError = "Listan kunde inte hittas.";
-			state.list = null;
-			state.items = [];
-			state.suggestions = [];
+			navigateTo("/", { replace: true });
 			return;
 		}
-
-		state.loadError = "Kunde inte ladda listan.";
-		console.error("Failed to load shopping list page", error);
+		navigateTo("/", { replace: true });
+		return;
 	} finally {
 		if (loadVersion === state.listLoadVersion) {
 			state.isLoading = false;
@@ -1764,8 +1747,7 @@ async function refreshStoreLayoutsForSelectedStore() {
 		if (!hasCurrentLayout) {
 			state.selectedLayoutId = "";
 		}
-	} catch (error) {
-		console.error("Load store layouts failed", error);
+	} catch {
 		state.storeLayouts = [];
 		state.selectedLayoutId = "";
 	}
@@ -1820,8 +1802,7 @@ async function handleStoreEditorSave() {
 		await loadListPageData(state.listId);
 		state.isStoreEditorOpen = false;
 		renderAll();
-	} catch (error) {
-		console.error("Update store/layout failed", error);
+	} catch {
 		state.storeEditorError = "Kunde inte spara butik/layout. Försök igen.";
 	} finally {
 		state.isStoreEditorSaving = false;
@@ -1860,8 +1841,7 @@ async function handleCreateStore() {
 
 		// Load layouts for the new store
 		await refreshStoreLayoutsForSelectedStore();
-	} catch (error) {
-		console.error("Create store failed", error);
+	} catch {
 		state.storeEditorError = "Kunde inte skapa butik. Försök igen.";
 		renderTitleAndStore();
 	} finally {
@@ -1899,12 +1879,10 @@ function queueProductSearch() {
 
 			state.searchResults = products;
 			state.searchHighlightedOptionId = "";
-		} catch (error) {
+		} catch {
 			if (requestVersion !== state.productSearchRequestVersion) {
 				return;
 			}
-
-			console.error("Product search failed", error);
 			state.searchResults = [];
 			state.searchHighlightedOptionId = "";
 		}
@@ -1983,8 +1961,8 @@ async function handleAddProductToList(productId) {
 		resetSearchAddItemUI({ keepFocus: true });
 		renderGroups();
 		renderSuggestions();
-	} catch (error) {
-		console.error("Add item failed", error);
+	} catch {
+		return;
 	}
 }
 
@@ -2025,8 +2003,8 @@ async function handleAddCustomItemToList(customName) {
 		resetSearchAddItemUI({ keepFocus: true });
 		renderGroups();
 		renderSuggestions();
-	} catch (error) {
-		console.error("Add custom item failed", error);
+	} catch {
+		return;
 	}
 }
 
@@ -2066,7 +2044,7 @@ async function handleCheckboxToggle(event) {
 		}
 
 		queueSuggestionsRefresh();
-	} catch (error) {
+	} catch {
 		if (state.toggleRequestVersionByItemId.get(normalizedItemId) !== requestVersion) {
 			return;
 		}
@@ -2074,7 +2052,6 @@ async function handleCheckboxToggle(event) {
 		item.is_checked = previousState.is_checked;
 		item.checked_at = previousState.checked_at;
 		renderGroups();
-		console.error("Toggle item failed", { itemId: normalizedItemId, checked, error });
 	}
 }
 
@@ -2085,8 +2062,8 @@ async function handleDeleteItem(itemId) {
 		state.list = { ...(state.list ?? {}), items: state.items };
 		queueSuggestionsRefresh();
 		renderGroups();
-	} catch (error) {
-		console.error("Delete item failed", error);
+	} catch {
+		return;
 	}
 }
 
@@ -2105,8 +2082,8 @@ function queueNoteAutosave(itemId, noteText) {
 			if (item) {
 				item.notes = noteText;
 			}
-		} catch (error) {
-			console.error("Update note failed", error);
+		} catch {
+			return;
 		}
 	}, 350);
 
