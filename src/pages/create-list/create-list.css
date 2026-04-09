@@ -101,6 +101,13 @@
   padding: var(--spacing-lg);
 }
 
+.create-list__search-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+}
+
 .create-list__section-title {
   margin-bottom: 0;
   font-size: var(--font-size-lg);

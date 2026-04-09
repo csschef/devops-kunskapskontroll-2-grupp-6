@@ -536,13 +536,6 @@ label {
   transition: all var(--transition-normal);
 }
 
-.create-list__search-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
-}
-
 @media (hover: hover) {
   .card:hover {
     box-shadow: var(--shadow-card-soft-hover);
