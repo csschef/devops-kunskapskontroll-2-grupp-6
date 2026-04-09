@@ -6,6 +6,8 @@ import "../profile/profile.css";
 import aisleLogo from "../../assets/aisle-logo.svg";
 
 export function renderProfilePage() {
+	document.title = "AISLE - Min profil";
+	
 	return `
 		<div class="profile-page-wrapper">
 			

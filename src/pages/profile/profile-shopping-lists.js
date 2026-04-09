@@ -18,9 +18,14 @@ export function renderShoppingListCard(list) {
 					${itemCount > 0 ? `· ${checkedCount} av ${itemCount} klara` : ""}
 				</p>
 			</div>
-			<button class="btn btn-primary" data-edit-list-id="${list.id}" type="button">
-				Redigera
-			</button>
+			<div style="display: flex; gap: 8px;">
+				<button class="btn btn-secondary" data-view-list-id="${list.id}" type="button">
+					Visa
+				</button>
+				<button class="btn btn-primary" data-edit-list-id="${list.id}" type="button">
+					Redigera
+				</button>
+			</div>
 		</div>
 	`;
 }
@@ -64,6 +69,15 @@ function setupListButtons(lists) {
  
 			const card = container.querySelector(`[data-list-id="${listId}"]`);
 			if (card) card.outerHTML = renderEditForm(list);
+			return;
+		}
+        
+        // Visa-knapp — Redirect till listan
+		const viewButton = event.target.closest("[data-view-list-id]");
+		if (viewButton) {
+			const listId = viewButton.dataset.viewListId;
+			// Här gör vi redirect till den nya URL:en
+			window.location.href = `/list/${listId}`;
 			return;
 		}
  
