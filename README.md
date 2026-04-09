@@ -12,9 +12,9 @@ AISLE är en webbapplikation som hjälper användare att handla snabbare och mer
 
 | Namn | Ansvarsområden |
 |------|----------------|
-| Sebastian Valdemarsson | Layout-editor, design system (global.css), CI/CD-pipeline, databaspopulering, mockup |
-| Viktor Lindqvist | Login, registrering, autentisering, auth-service, home-sidan |
-| Hampus Andersson | Databas & infrastruktur, ER-diagram, SPA-router, create-list, shopping-list |
+| Sebastian | Layout-editor, design system (global.css), CI/CD-pipeline, databaspopulering, mockup |
+| Viktor | Login, registrering, autentisering, auth-service, home-sidan |
+| Hampus | Databas & infrastruktur, ER-diagram, SPA-router, create-list, shopping-list |
 | Elsa | Profilsidan |
 
 ## Teknikstack
