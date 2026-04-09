@@ -293,6 +293,9 @@ a {
     color: var(--color-primary-700);
     text-decoration: underline;
   }
+  a.btn:hover {
+    text-decoration: none;
+  }
 }
 
 a:focus-visible {
