@@ -3,7 +3,6 @@ import registerValidationConfig from "../../config/register-validation.json";
 import { navigateTo } from "../../router/router.js";
 import aisleLogo from "../../assets/aisle-logo.svg";
 
-// Kommer göra om denna sida också. Den funkar för tillfället. Men detta är bara en snabb placeholder utan att göra någon speciell design eller så.
 export function renderLoginPage() {
     document.title = "AISLE - Logga in";
 
