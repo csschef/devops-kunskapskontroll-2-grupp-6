@@ -27,7 +27,7 @@ export function renderLayoutEditorPage() {
 								<li>Fyll i butiksnamn och stad.</li>
 								<li>Dra sektioner från inaktiv lista till aktiv lista.</li>
 								<li>Sortera sektionerna i aktiv lista i samma ordning som de kommer i butiken.</li>
-								<li>Klicka på spara butikslayout.</li>
+								<li>Klicka på spara.</li>
 							</ul>
 						</div>
 					</details>
