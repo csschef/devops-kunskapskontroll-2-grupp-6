@@ -47,55 +47,14 @@ body.layout-editor-touch-dragging {
   min-height: 100svh;
   position: relative;
   overflow: hidden;
-  background: transparent;
+  background: url("../../assets/auth-bg.jpg") no-repeat top center / cover;
+  background-attachment: fixed;
 }
 
 .layout-editor-fixed-bg {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100lvh;
-  background: url("../assets/auth-bg.jpg") no-repeat;
-  background-position: top;
-  background-size: cover;
-  z-index: 0;
-  pointer-events: none;
-  transform: translateZ(0);
+  display: none;
 }
 
-.layout-editor-shell::before,
-.layout-editor-shell::after {
-  content: "";
-  position: fixed;
-  width: 260px;
-  height: 260px;
-  border-radius: var(--radius-full);
-  z-index: 0;
-  filter: blur(2px);
-  pointer-events: none;
-}
-
-.layout-editor-shell::before {
-  top: -80px;
-  left: -80px;
-  background: radial-gradient(circle at center, var(--color-primary-200) 0%, transparent 70%);
-}
-
-.layout-editor-shell::after {
-  bottom: -90px;
-  right: -60px;
-  background: radial-gradient(circle at center, var(--color-secondary-200) 0%, transparent 70%);
-}
-
-@media (hover: none) and (pointer: coarse) {
-
-  .layout-editor-shell::before,
-  .layout-editor-shell::after {
-    position: absolute;
-  }
-}
 
 #layout-editor-page {
   max-width: 1080px;
@@ -106,6 +65,11 @@ body.layout-editor-touch-dragging {
 
 #layout-editor-header {
   padding: var(--spacing-lg);
+  background: radial-gradient(120% 140% at 0% 0%, var(--color-primary-50) 0%, transparent 45%), radial-gradient(120% 120% at 100% 100%, var(--color-secondary-100) 0%, transparent 40%), var(--gradient-card-default);
+}
+
+#layout-editor-brand-panel {
+  padding: var(--spacing-md);
 }
 
 #layout-editor-divider {
@@ -124,6 +88,7 @@ body.layout-editor-touch-dragging {
 #layout-editor-instructions {
   margin-top: var(--spacing-md);
 }
+
 
 #layout-editor-heading-group {
   display: grid;
@@ -150,74 +115,6 @@ body.layout-editor-touch-dragging {
   display: none;
 }
 
-#layout-editor-instructions-toggle {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--spacing-sm);
-  cursor: pointer;
-  margin-bottom: var(--spacing-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
-
-#layout-editor-instructions-toggle::-webkit-details-marker {
-  display: none;
-}
-
-#layout-editor-instructions-toggle::before {
-  content: "";
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-full);
-  border: none;
-  background: var(--color-primary-500);
-  background-image:
-    linear-gradient(var(--color-white), var(--color-white)),
-    linear-gradient(var(--color-white), var(--color-white)),
-    linear-gradient(var(--color-primary-500), var(--color-primary-500));
-  background-repeat: no-repeat;
-  background-position: center, center, center;
-  background-size: 10px 1.5px, 1.5px 10px, 100% 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transform: rotate(0deg);
-  transition: transform var(--transition-fast), background-size var(--transition-fast);
-}
-
-#layout-editor-instructions[open] #layout-editor-instructions-toggle::before {
-  transform: rotate(45deg);
-  background-size: 10px 1.5px, 1.5px 10px, 100% 100%;
-}
-
-#layout-editor-instructions-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--spacing-sm);
-}
-
-#layout-editor-instructions-list li {
-  position: relative;
-  padding-left: calc(var(--spacing-lg) + var(--spacing-sm));
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-#layout-editor-instructions-list li::before {
-  content: "";
-  border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-300));
-  width: 10px;
-  height: 10px;
-  position: absolute;
-  top: .5em;
-  left: 0;
-}
 
 #layout-editor-active-list,
 #layout-editor-inactive-list {
@@ -390,6 +287,7 @@ body.layout-editor-touch-dragging {
 #layout-editor-active-list .layout-editor-category-name {
   flex: 1 1 auto;
   min-width: 0;
+  font-weight: var(--font-weight-normal);
 }
 
 #layout-editor-inactive-list .layout-editor-drag-handle,
@@ -463,6 +361,9 @@ body.layout-editor-touch-dragging {
     display: flex;
     gap: var(--spacing-xl);
     align-items: flex-start;
+    background: radial-gradient(120% 140% at 0% 0%, rgba(234, 244, 255, 0.85) 0%, transparent 45%), radial-gradient(120% 120% at 100% 100%, rgba(232, 234, 247, 0.75) 0%, transparent 40%), rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 
   .layout-editor-shell {
@@ -517,18 +418,6 @@ body.layout-editor-touch-dragging {
     padding-right: 0;
   }
 
-  #layout-editor-instructions-toggle {
-    display: none;
-  }
-
-  #layout-editor-instructions:not([open])> :not(summary) {
-    display: block !important;
-  }
-
-  #layout-editor-instructions-body {
-    display: block !important;
-    padding-top: 0;
-  }
 
   #layout-editor-actions {
     display: flex;
@@ -546,7 +435,7 @@ body.layout-editor-touch-dragging {
     min-width: 0;
   }
 
-  #layout-editor-save-button.is-visible + #layout-editor-cancel-button,
+  #layout-editor-save-button.is-visible+#layout-editor-cancel-button,
   #layout-editor-cancel-button:first-child {
     flex: 0 1 auto;
     min-width: 160px;
@@ -559,7 +448,7 @@ body.layout-editor-touch-dragging {
     flex: 1 1 0;
   }
 
-  #layout-editor-save-button.is-visible + #layout-editor-cancel-button {
+  #layout-editor-save-button.is-visible+#layout-editor-cancel-button {
     flex: 1 1 0;
     margin-left: 0;
     margin-right: 0;

@@ -20,17 +20,16 @@ export function renderLayoutEditorPage() {
 					</div>
 					<p>Lägg till gångordningen för din butik genom att dra sektioner i rätt ordning.</p>
 
-					<details id="layout-editor-instructions">
-						<summary id="layout-editor-instructions-toggle">Instruktioner</summary>
+					<div id="layout-editor-instructions">
 						<div id="layout-editor-instructions-body">
-							<ul id="layout-editor-instructions-list">
+							<ul id="layout-editor-instructions-list" class="auth-feature-list">
 								<li>Fyll i butiksnamn och stad.</li>
 								<li>Dra sektioner från inaktiv lista till aktiv lista.</li>
 								<li>Sortera sektionerna i aktiv lista i samma ordning som de kommer i butiken.</li>
 								<li>Klicka på spara.</li>
 							</ul>
 						</div>
-					</details>
+					</div>
 
 					<img
 						id="layout-editor-route-image"
