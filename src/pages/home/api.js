@@ -3,10 +3,12 @@ import { getCurrentSession } from "../../auth-service.js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 200;
 const QUERY_LATEST_LISTS_FOR_USER = (userId) => `shopping_lists?user_id=eq.${encodeValue(userId)}&select=id,title,is_completed,updated_at,created_at,stores(name,city),store_layouts(stores(name,city))&order=updated_at.desc.nullslast,created_at.desc&limit=3`;
-const QUERY_LAYOUTS = `store_layouts?select=id,name,stores(name,city)&limit=20000`;
-const QUERY_LAYOUT_USAGE = `shopping_lists?select=layout_id,user_id&layout_id=not.is.null&user_id=not.is.null&limit=20000`;
-const QUERY_TOP_PRODUCTS = `purchase_history?select=product_id,quantity,products!inner(name)&product_id=not.is.null&limit=20000`;
+const QUERY_LAYOUTS = `store_layouts?select=id,name,stores(name,city)&order=id.asc`;
+const QUERY_LAYOUT_USAGE = `shopping_lists?select=id,layout_id,user_id&layout_id=not.is.null&user_id=not.is.null&order=id.asc`;
+const QUERY_TOP_PRODUCTS = `purchase_history?select=id,product_id,quantity,products!inner(name)&product_id=not.is.null&order=id.asc`;
 const QUERY_USER_STATS_LISTS = (userId) => `shopping_lists?user_id=eq.${encodeValue(userId)}&select=id,is_completed,stores(name,city),store_layouts(stores(name,city))`;
 const QUERY_USER_STATS_MEMBERS = (userId) => `shopping_list_members?user_id=eq.${encodeValue(userId)}&select=id,shopping_list_id`;
 
@@ -58,6 +60,51 @@ async function restGetPublic(path) {
     }
 
     return response.json();
+}
+
+function withPagination(path, limit, offset) {
+    return `${path}&limit=${limit}&offset=${offset}`;
+}
+
+async function fetchAllRows(requestFn, basePath, pageSize = PAGE_SIZE, maxPages = MAX_PAGES) {
+    const rows = [];
+
+    for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+        const offset = pageIndex * pageSize;
+        const page = await requestFn(withPagination(basePath, pageSize, offset));
+
+        if (!Array.isArray(page) || page.length === 0) {
+            break;
+        }
+
+        rows.push(...page);
+
+        if (page.length < pageSize) {
+            break;
+        }
+    }
+
+    if (rows.length >= pageSize * maxPages) {
+        console.warn("Home API pagination reached maxPages cap; consider server-side aggregates for better scalability.");
+    }
+
+    return rows;
+}
+
+async function fetchAllRowsPublicThenAuth(basePath, accessToken) {
+    let publicRows = [];
+
+    try {
+        publicRows = await fetchAllRows((path) => restGetPublic(path), basePath);
+    } catch (error) {
+        console.warn("Public paginated fetch failed:", error);
+    }
+
+    if (publicRows.length || !accessToken) {
+        return publicRows;
+    }
+
+    return fetchAllRows((path) => restGet(path, accessToken), basePath);
 }
 
 function toIsoOrNull(value) {
@@ -171,37 +218,20 @@ async function getLatestListsForUser(userId, accessToken) {
 }
 
 async function getMostUsedLayouts(accessToken) {
-    const [publicLayoutRowsResult, publicUsageRowsResult] = await Promise.allSettled([
-        restGetPublic(QUERY_LAYOUTS),
-        restGetPublic(QUERY_LAYOUT_USAGE),
+    const [layoutRowsResult, usageRowsResult] = await Promise.allSettled([
+        fetchAllRowsPublicThenAuth(QUERY_LAYOUTS, accessToken),
+        fetchAllRowsPublicThenAuth(QUERY_LAYOUT_USAGE, accessToken),
     ]);
 
-    let layoutRows = pickSettledValue(publicLayoutRowsResult);
-    let usageRows = pickSettledValue(publicUsageRowsResult);
-
-    if (accessToken && (!layoutRows.length || !usageRows.length)) {
-        const [authLayoutRowsResult, authUsageRowsResult] = await Promise.allSettled([restGet(QUERY_LAYOUTS, accessToken), restGet(QUERY_LAYOUT_USAGE, accessToken)]);
-        if (authLayoutRowsResult.status === "fulfilled" && authLayoutRowsResult.value.length) layoutRows = authLayoutRowsResult.value;
-        if (authUsageRowsResult.status === "fulfilled" && authUsageRowsResult.value.length) usageRows = authUsageRowsResult.value;
-    }
+    const layoutRows = pickSettledValue(layoutRowsResult);
+    const usageRows = pickSettledValue(usageRowsResult);
 
     return aggregateMostUsedLayouts(layoutRows, usageRows);
 }
 
 async function getTopPurchasedProducts(accessToken) {
-    let rows;
-
-    try {
-        rows = await restGetPublic(QUERY_TOP_PRODUCTS);
-    } catch (error) {
-        console.warn("Kunde inte hämta offentliga produktköp:", error);
-    }
-
-    if ((!rows || !rows.length) && accessToken) {
-        rows = await restGet(QUERY_TOP_PRODUCTS, accessToken);
-    }
-
-    return aggregateTopProducts(Array.isArray(rows) ? rows : []);
+    const rows = await fetchAllRowsPublicThenAuth(QUERY_TOP_PRODUCTS, accessToken);
+    return aggregateTopProducts(rows);
 }
 
 async function getUserStats(userId, accessToken) {
