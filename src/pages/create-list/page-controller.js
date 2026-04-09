@@ -231,6 +231,16 @@ function getLayoutDisplayLabel(layout) {
 	return `${authorLabel}s layout`;
 }
 
+function userHasLayoutForStore() {
+	if (!state.currentUserId) {
+		return false;
+	}
+
+	return state.layouts.some(
+		(layout) => String(layout.created_by ?? "").trim() === String(state.currentUserId)
+	);
+}
+
 function renderLayouts() {
 	const wrapper = document.querySelector("#layout-list-wrapper");
 	const list = document.querySelector("#layout-list");
@@ -266,21 +276,38 @@ function renderLayouts() {
 	}
 
 	if (state.layouts.length === 0) {
+		const createButtonHTML = userHasLayoutForStore()
+			? ""
+			: `
+				<button
+					type="button"
+					class="layout-row layout-row--create"
+					data-create-layout="true"
+					aria-label="Skapa egen layout"
+				>
+					<span class="layout-row-info">Skapa egen layout</span>
+					<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
+				</button>
+			`;
 		list.innerHTML = `
 			<p class="create-list__status-text">Det finns inga layouter för den här butiken än.</p>
-			<button
-				type="button"
-				class="layout-row layout-row--create"
-				data-create-layout="true"
-				aria-label="Skapa egen layout"
-			>
-				<span class="layout-row-info">Skapa egen layout</span>
-				<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
-			</button>
+			${createButtonHTML}
 		`;
 		selectedLayoutSummary.textContent = "";
 		return;
 	}
+
+	const createButtonHTML = userHasLayoutForStore()
+		? ""
+		: `<button
+			type="button"
+			class="layout-row layout-row--create"
+			data-create-layout="true"
+			aria-label="Skapa egen layout"
+		>
+			<span class="layout-row-info">Skapa egen layout</span>
+			<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
+		</button>`;
 
 	list.innerHTML =
 		state.layouts
@@ -302,15 +329,7 @@ function renderLayouts() {
 				`,
 			)
 			.join("") +
-		`<button
-			type="button"
-			class="layout-row layout-row--create"
-			data-create-layout="true"
-			aria-label="Skapa egen layout"
-		>
-			<span class="layout-row-info">Skapa egen layout</span>
-			<span class="layout-row-rating" aria-hidden="true">&rarr;</span>
-		</button>`;
+		createButtonHTML;
 
 	if (state.selectedLayout) {
 		selectedLayoutSummary.textContent = `Vald layout: ${getLayoutDisplayLabel(state.selectedLayout)}`;
