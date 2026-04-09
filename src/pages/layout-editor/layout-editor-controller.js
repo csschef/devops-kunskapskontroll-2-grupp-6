@@ -928,19 +928,11 @@ function syncSaveButtonState() {
 	const hasNoSections = !Array.isArray(formState.sections) || formState.sections.length === 0;
 	const hasExistingLayoutConflict = Boolean(existingLayoutConflict);
 	const hasNoEditChanges = Boolean(editModeBaselineFingerprint) && buildFormFingerprint(formState) === editModeBaselineFingerprint;
-	saveButton.disabled = saveActionIsPending || hasNoSections || hasExistingLayoutConflict || hasNoEditChanges;
 
-	if (hasExistingLayoutConflict) {
-		saveButton.title = "Du har redan en layout för den här butiken och staden. Välj Ja eller Nej under stadfältet.";
-		return;
-	}
-
-	if (hasNoEditChanges) {
-		saveButton.title = "Gör en ändring i butik, stad eller sektionordning för att uppdatera layouten.";
-		return;
-	}
-
-	saveButton.title = hasNoSections ? "Lägg till minst en sektion i Valda sektioner för att aktivera spara." : "";
+	const shouldShow = !saveActionIsPending && !hasNoSections && !hasExistingLayoutConflict && !hasNoEditChanges;
+	saveButton.classList.toggle("is-visible", shouldShow);
+	saveButton.disabled = !shouldShow;
+	saveButton.title = "";
 }
 
 function bindSaveEligibilitySync() {

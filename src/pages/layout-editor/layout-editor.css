@@ -303,6 +303,14 @@ body.layout-editor-touch-dragging {
   max-width: none;
 }
 
+#layout-editor-save-button {
+  display: none;
+}
+
+#layout-editor-save-button.is-visible {
+  display: block;
+}
+
 #layout-editor-cancel-button {
   margin-top: var(--spacing-sm);
 }
@@ -536,6 +544,25 @@ body.layout-editor-touch-dragging {
     flex: 1 1 0;
     max-width: none !important;
     min-width: 0;
+  }
+
+  #layout-editor-save-button.is-visible + #layout-editor-cancel-button,
+  #layout-editor-cancel-button:first-child {
+    flex: 0 1 auto;
+    min-width: 160px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #layout-editor-save-button.is-visible {
+    display: block;
+    flex: 1 1 0;
+  }
+
+  #layout-editor-save-button.is-visible + #layout-editor-cancel-button {
+    flex: 1 1 0;
+    margin-left: 0;
+    margin-right: 0;
   }
 
   #layout-editor-cancel-button {
