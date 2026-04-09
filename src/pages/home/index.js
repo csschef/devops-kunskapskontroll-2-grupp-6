@@ -162,21 +162,32 @@ export function setupHomePage() {
 	if (!elements) { return; }
 
 	void (async () => {
+		let dashboard;
+		let session;
+		let isAuthenticated;
+
 		try {
-			const dashboard = await getHomeDashboardData();
-			const session = dashboard?.session;
-			const isAuthenticated = Boolean(dashboard?.isAuthenticated);
-
-			if (!isAuthenticated) {
-				renderGuestState(elements);
-				return;
-			}
-
-			const profile = await getMyProfile();
-			const displayName = resolveDisplayName({ profile, session }) || "vän";
-			renderAuthenticatedState(elements, { displayName, dashboard });
+			dashboard = await getHomeDashboardData();
+			session = dashboard?.session;
+			isAuthenticated = Boolean(dashboard?.isAuthenticated);
 		} catch {
 			renderErrorState(elements);
+			return;
 		}
+
+		if (!isAuthenticated) {
+			renderGuestState(elements);
+			return;
+		}
+
+		let profile = null;
+		try {
+			profile = await getMyProfile();
+		} catch (error) {
+			console.warn("Kunde inte hämta profil för hemsidan, använder session-metadata:", error);
+		}
+
+		const displayName = resolveDisplayName({ profile, session }) || "vän";
+		renderAuthenticatedState(elements, { displayName, dashboard });
 	})();
 }
