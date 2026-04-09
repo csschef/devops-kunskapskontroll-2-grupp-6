@@ -133,6 +133,10 @@ function formatStoreLabel(store) {
 }
 
 function aggregateMostUsedLayouts(layoutRows, usageRows) {
+    if (!Array.isArray(usageRows) || usageRows.length === 0) {
+        return [];
+    }
+
     const byLayout = new Map();
 
     layoutRows.forEach((layout) => {
