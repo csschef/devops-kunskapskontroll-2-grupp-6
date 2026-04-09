@@ -1383,7 +1383,7 @@ async function handleShareMemberRemoval(memberUserId) {
 
 	try {
 		await removeListMember(state.listId, normalizedUserId);
-		state.shareInviteSuccess = "Medlemmen togs bort fran listan.";
+		state.shareInviteSuccess = "Medlemmen togs bort från listan.";
 		await refreshSharingData();
 	} catch (error) {
 		state.shareInviteError = mapShareRemovalError(error);
@@ -1445,7 +1445,7 @@ function renderAll() {
 		shareButton.innerHTML = isShareView
 			? '<i class="ti ti-list" aria-hidden="true"></i>'
 			: '<i class="ti ti-users" aria-hidden="true"></i>';
-		shareButton.setAttribute("aria-label", isShareView ? "Visa inkopslista" : "Hantera delning");
+		shareButton.setAttribute("aria-label", isShareView ? "Visa inköpslista" : "Hantera delning");
 	}
 
 	renderTitleAndStore();

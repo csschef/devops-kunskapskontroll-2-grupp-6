@@ -71,6 +71,10 @@ async function createListAndNavigate(layoutId = null, options = {}) {
 	renderLayouts();
 
 	try {
+		if (!state.currentUserId) {
+			state.currentUserId = await getCurrentUserId();
+		}
+
 		const listId = await createShoppingList({
 			storeId: state.selectedStore.id,
 			layoutId,

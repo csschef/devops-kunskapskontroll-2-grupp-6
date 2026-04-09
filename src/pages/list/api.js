@@ -1292,6 +1292,7 @@ export function subscribeToShoppingListItems(listId, {
         event: "*",
         schema: "public",
         table: "shopping_list_items",
+        filter: `shopping_list_id=eq.${normalizedListId}`,
       },
       (payload) => {
         const payloadListId = getRealtimePayloadListId(payload);
