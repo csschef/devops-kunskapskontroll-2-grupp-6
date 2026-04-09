@@ -59,7 +59,7 @@ export function createTopLayoutsMarkup(layouts = []) {
                     <p class="home-list-name">${escapeHtml(layout?.storeName || "Okänd butik")}</p>
                     <p class="home-list-subline">${escapeHtml(layout?.city || "Okänd stad")}</p>
                 </div>
-                <span class="home-rating" aria-label="${Number(layout?.likes) || 0} användare"><i class="ti ti-star"></i> ${Number(layout?.likes) || 0}</span>
+                <span class="home-rating" aria-label="${Number(layout?.likes) || 0} användare"><i class="ti ti-star" aria-hidden="true"></i> ${Number(layout?.likes) || 0}</span>
             </article>
         `;
     }).join("");
