@@ -286,7 +286,7 @@
     font-size: var(--font-size-base);
 }
 
-.popular {
+.home-popular {
     align-self: center;
 }
 
@@ -356,7 +356,7 @@
         grid-template-columns: 1fr;
     }
 
-    .popular {
+    .home-popular {
         width: 100%;
         justify-content: center;
     }

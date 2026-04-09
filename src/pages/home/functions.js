@@ -72,7 +72,7 @@ export function createTopProductsMarkup(products = []) {
                 <p class="home-list-name">${escapeHtml(product?.name || "Okänd produkt")}</p>
                 <p class="home-list-subline">Inköpt ${Number(product?.totalQuantity) || 0} gånger</p>
             </div>
-            <span class="status-badge status-warning popular">Populär</span>
+            <span class="status-badge status-warning home-popular">Populär</span>
         </article>
     `).join("");
 }
