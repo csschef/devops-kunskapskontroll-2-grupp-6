@@ -280,6 +280,12 @@
     flex: 1;
 }
 
+#home-stats-content > .home-locked-message {
+    width: 100%;
+    flex: 1;
+    display: flex;
+}
+
 .home-stat-card {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
