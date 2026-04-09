@@ -2,27 +2,31 @@
 
 ## Projektbeskrivning
 
-Projektet utvecklar en smart inköpsapp som hjälper användaren att handla snabbare genom att sortera inköpslistan efter butikens faktiska gångordning. Lösningen bygger på crowdsourcad butikslayout och fokuserar på ett enkelt grundflöde: skapa lista, välj butik, få sorterad ordning och checka av varor. På sikt utökas appen med prediktiva förslag för återkommande inköp baserat på användarbeteende.
+AISLE är en webbapplikation som hjälper användare att handla snabbare och mer effektivt. Användaren skapar en inköpslista och väljer sin butik — appen sorterar sedan listan automatiskt efter butikens gångordning, så att man handlar i rätt ordning utan att behöva gå fram och tillbaka. Butikslayouter skapas och delas av användarna själva via en inbyggd layout-editor.
 
 ## Länkar
 
 - Vercel: https://vercel.com/csschef/devops-kunskapskontroll-2-grupp-6
-- Trello/Jira (valfritt): [Fyll i länk]
 
 ## Ansvarsområden
 
-Detaljerad arbetsuppdelning finns i [WBS](docs/wbs.md).
+| Namn | Ansvarsområden |
+|------|----------------|
+| Sebastian Valdemarsson | Layout-editor, design system (global.css), CI/CD-pipeline, databaspopulering, mockup |
+| Viktor Lindqvist | Login, registrering, autentisering, auth-service, home-sidan |
+| Hampus Andersson | Databas & infrastruktur, ER-diagram, SPA-router, create-list, shopping-list |
+| Elsa | Profilsidan |
 
 ## Teknikstack
 
 - Frontend: Vite + JavaScript
 - Tester: Vitest + Playwright
 - Linting: ESLint
-- Databas/API: Supabase (planerad)
+- Databas/API: Supabase
 
 ## Struktur
 
-- docs/: dokumentation (logg, WBS, analyser)
+- docs/: dokumentation (er-diagram, mockup, kravspec, todo, behovs- och marknadsanalys)
 - src/: applikationskod
 - tests/unit: enhetstester
 - tests/integration: integrationstester
