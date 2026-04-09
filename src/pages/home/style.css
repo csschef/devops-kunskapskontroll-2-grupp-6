@@ -223,6 +223,22 @@
     color: var(--color-text);
 }
 
+.home-list-name-row {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.home-list-owner {
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    opacity: 0.78;
+}
+
 .home-list-subline {
     margin: var(--spacing-xs) 0 0;
     color: var(--color-text-secondary);
