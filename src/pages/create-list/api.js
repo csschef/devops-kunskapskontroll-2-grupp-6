@@ -180,51 +180,47 @@ export async function createShoppingList({
   storeId,
   layoutId,
   userId,
-  title = "Min Inkoplista",
+  title = "Min Inköpslista",
 }) {
-  const basePayloads = [
-    { store_id: storeId, store_layout_id: layoutId, title },
-    { store_id: storeId, layout_id: layoutId, title },
-    { store_id: storeId, store_layout_id: layoutId, name: title },
-    { store_id: storeId, layout_id: layoutId, name: title },
-    { store_id: storeId, title },
-    { store_id: storeId, name: title },
-    { store_id: storeId },
-  ];
+  const UUID_REGEX =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-  const payloadCandidates = basePayloads.flatMap((payload) => {
-    if (!userId) {
-      return [payload];
-    }
+  const normalizedTitle = String(title ?? "").trim() || "Min Inköpslista";
+  const normalizedStoreId = String(storeId ?? "").trim();
+  const normalizedLayoutId = String(layoutId ?? "").trim();
+  const normalizedUserId = String(userId ?? "").trim();
 
-    return [
-      { ...payload, user_id: userId },
-      { ...payload, created_by: userId },
+  if (!UUID_REGEX.test(normalizedStoreId)) {
+    throw new Error("Invalid or missing storeId: expected UUID.");
+  }
+
+  const payload = {
+    title: normalizedTitle,
+    store_id: normalizedStoreId,
+    layout_id: UUID_REGEX.test(normalizedLayoutId) ? normalizedLayoutId : null,
+    user_id: UUID_REGEX.test(normalizedUserId) ? normalizedUserId : null,
+  };
+
+  const { data, error } = await supabase
+    .from("shopping_lists")
+    .insert(payload)
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("Supabase createShoppingList insert failed", {
       payload,
-    ];
-  });
-
-  let lastError = null;
-
-  for (const payload of payloadCandidates) {
-    const { data, error } = await supabase
-      .from("shopping_lists")
-      .insert(payload)
-      .select("id")
-      .single();
-
-    if (!error && data?.id) {
-      return data.id;
-    }
-
-    if (error) {
-      lastError = error;
-    }
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+    throw error;
   }
 
-  if (lastError) {
-    throw lastError;
+  if (!data?.id) {
+    throw new Error("Shopping list insert succeeded but no id was returned.");
   }
 
-  throw new Error("Failed to create shopping list.");
+  return data.id;
 }

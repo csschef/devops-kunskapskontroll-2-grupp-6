@@ -265,7 +265,7 @@ function normalizeListRecord(record) {
 
   return {
     ...record,
-    title: getFirstTruthyValue(record, ["title", "name"]) ?? "Min Inkoplista",
+    title: getFirstTruthyValue(record, ["title", "name"]) ?? "Min Inköpslista",
     user_id: getFirstTruthyValue(record, ["user_id", "created_by"]),
     store_id: getFirstTruthyValue(record, ["store_id", "storeId"]),
     store_layout_id: getFirstTruthyValue(record, ["store_layout_id", "layout_id", "store_layout"]),
@@ -443,7 +443,7 @@ export async function getShoppingListItems(listId) {
       shopping_list_id: getItemListId(item),
       product,
       category,
-      display_name: item.custom_name || product?.name || "Okand vara",
+      display_name: item.custom_name || product?.name || "Okänd vara",
       category_name: categoryName,
       is_checked: Boolean(item.is_checked),
       notes: String(item.notes ?? ""),

@@ -15,7 +15,7 @@ import {
 	updateShoppingListTitle,
 	updateShoppingListStoreAndLayout,
 } from "./api.js";
-import "./shopping-list.css";
+import "./list.css";
 
 const state = {
 	listId: null,
@@ -777,6 +777,19 @@ function renderTitleAndStore() {
 	if (storeOverlay) {
 		storeOverlay.classList.toggle("is-visible", state.isStoreEditorOpen);
 		storeOverlay.setAttribute("aria-hidden", state.isStoreEditorOpen ? "false" : "true");
+		
+		// Position overlay to start below the store editor card
+		if (state.isStoreEditorOpen) {
+			const editorCard = document.querySelector(".list-page__store-editor-card");
+			if (editorCard) {
+				const rect = editorCard.getBoundingClientRect();
+				storeOverlay.style.top = `${rect.bottom}px`;
+			} else {
+				storeOverlay.style.top = "0px";
+			}
+		} else {
+			storeOverlay.style.top = "0px";
+		}
 	}
 
 	if (storeChevron) {

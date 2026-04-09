@@ -32,7 +32,7 @@ let searchDebounceTimer;
 let latestSearchRequestId = 0;
 let pageEventController;
 
-function navigateToLayoutEditorWithStorePrefill() {
+function navigateToLayoutEditorWithStorePrefill(listId = null) {
 	const storeName = String(
 		state.selectedStore?.name
 			?? state.storeNameQuery
@@ -44,25 +44,29 @@ function navigateToLayoutEditorWithStorePrefill() {
 			?? "",
 	).trim();
 
-	if (!storeName && !city) {
-		navigateTo("/layout-editor");
-		return;
-	}
-
 	const query = new URLSearchParams();
+
 	if (storeName) {
 		query.set("storeName", storeName);
 	}
+
 	if (city) {
 		query.set("city", city);
 	}
 
-	navigateTo(`/layout-editor?${query.toString()}`);
+	if (listId) {
+		query.set("listId", String(listId));
+	}
+
+	const queryString = query.toString();
+	navigateTo(queryString ? `/layout-editor?${queryString}` : "/layout-editor");
 }
 
-async function createListAndNavigate(layoutId = null) {
+async function createListAndNavigate(layoutId = null, options = {}) {
+	const { redirectToList = true } = options;
+
 	if (!state.selectedStore) {
-		return;
+		return null;
 	}
 
 	state.isCreatingList = true;
@@ -74,13 +78,18 @@ async function createListAndNavigate(layoutId = null) {
 			storeId: state.selectedStore.id,
 			layoutId,
 			userId: state.currentUserId,
-			title: "Min Inkoplista",
+				title: "Min Inköpslista",
 		});
 
-		navigateTo(`/list/${listId}`);
+		if (redirectToList) {
+			navigateTo(`/list/${listId}`);
+		}
+
+		return listId;
 	} catch (error) {
 		console.error("Failed to create shopping list", error);
-		state.createListError = "Kunde inte skapa listan. Forsok igen.";
+		state.createListError = "Kunde inte skapa listan. Försök igen.";
+		return null;
 	} finally {
 		state.isCreatingList = false;
 		renderLayouts();
@@ -200,7 +209,7 @@ function sortLayoutsForDisplay(layouts) {
 
 function getLayoutAuthorLabel(layout) {
 	if (!layout) {
-		return "Okand skapare";
+		return "Okänd skapare";
 	}
 
 	const authorName = String(layout.author_name ?? "").trim();
@@ -208,14 +217,14 @@ function getLayoutAuthorLabel(layout) {
 		return authorName;
 	}
 
-	return "Okand skapare";
+	return "Okänd skapare";
 }
 
 function getLayoutDisplayLabel(layout) {
 	const authorLabel = getLayoutAuthorLabel(layout);
 
-	if (authorLabel === "Okand skapare") {
-		return "Okand skapares layout";
+	if (authorLabel === "Okänd skapare") {
+		return "Okänd skapares layout";
 	}
 
 	return `${authorLabel}s layout`;
@@ -250,7 +259,7 @@ function renderLayouts() {
 	}
 
 	if (state.isCreatingList) {
-		selectedLayoutSummary.textContent = "Skapar inkopslista...";
+		selectedLayoutSummary.textContent = "Skapar inköpslista...";
 	} else if (state.createListError) {
 		selectedLayoutSummary.textContent = state.createListError;
 	}
@@ -284,7 +293,7 @@ function renderLayouts() {
 							: ""
 						}"
 						data-layout-id="${layout.id}"
-						aria-label="Valj ${getLayoutDisplayLabel(layout)}"
+						aria-label="Välj ${getLayoutDisplayLabel(layout)}"
 					>
 						<span class="layout-row-info">${getLayoutDisplayLabel(layout)}</span>
 						<span class="layout-row-rating">⭐ ${Number(layout.usage_count ?? 0)}</span>
@@ -581,7 +590,13 @@ function initCreateListPage() {
 			const createLayoutButton = event.target.closest("[data-create-layout]");
 
 			if (createLayoutButton) {
-				navigateToLayoutEditorWithStorePrefill();
+				state.selectedLayout = null;
+				state.currentStep = "layout-pending";
+				const createdListId = await createListAndNavigate(null, { redirectToList: false });
+
+				if (createdListId) {
+					navigateToLayoutEditorWithStorePrefill(createdListId);
+				}
 				return;
 			}
 
