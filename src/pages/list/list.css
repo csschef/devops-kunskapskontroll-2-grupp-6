@@ -172,6 +172,123 @@
   min-height: 44px;
 }
 
+.list-page__share-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  padding: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-primary-600);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.list-page__share-button .ti {
+  font-size: 1.25rem;
+}
+
+.list-page__share-button:hover {
+  background: var(--color-primary-50);
+}
+
+.list-page__share-button[aria-pressed="true"] {
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.list-page__share-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-inline: var(--spacing-sm);
+}
+
+.list-page__share-view[hidden] {
+  display: none !important;
+}
+
+.list-page__share-panel {
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+}
+
+.list-page__members {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+}
+
+.list-page__member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-white);
+}
+
+.list-page__member-row--owner {
+  border-color: var(--color-primary-200);
+  background: var(--color-primary-50);
+}
+
+.list-page__member-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.list-page__member-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.list-page__member-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.list-page__member-remove {
+  min-height: 36px;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.list-page__member-empty {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+}
+
+.list-page__share-invite-form {
+  margin-top: var(--spacing-sm);
+}
+
+.list-page__share-invite-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--spacing-sm);
+}
+
+.list-page__status--success {
+  color: var(--color-success-700);
+}
+
 .list-page__title-hint--error {
   color: var(--color-danger-600);
 }
@@ -949,7 +1066,8 @@
   .list-page__store-editor-card,
   .list-page__search-card,
   .list-page__suggestion-card,
-  .list-page__group {
+  .list-page__group,
+  .list-page__share-view {
     margin-inline: var(--spacing-md);
   }
 

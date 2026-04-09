@@ -7,6 +7,16 @@ export const LIST_ACCESS_ERROR_CODES = Object.freeze({
   FORBIDDEN: "LIST_ACCESS_FORBIDDEN",
 });
 
+export const LIST_SHARE_ERROR_CODES = Object.freeze({
+  NOT_OWNER: "LIST_SHARE_NOT_OWNER",
+  INVALID_EMAIL: "LIST_SHARE_INVALID_EMAIL",
+  USER_NOT_FOUND: "LIST_SHARE_USER_NOT_FOUND",
+  ALREADY_MEMBER: "LIST_SHARE_ALREADY_MEMBER",
+  OWNER_CANNOT_BE_MEMBER: "LIST_SHARE_OWNER_CANNOT_BE_MEMBER",
+  CANNOT_REMOVE_OWNER: "LIST_SHARE_CANNOT_REMOVE_OWNER",
+  INVALID_USER: "LIST_SHARE_INVALID_USER",
+});
+
 const CATEGORY_LABEL_BY_SLUG = {
   "frukt-gront": "Frukt & Grönt",
   "brod-bakverk": "Bröd & Bakverk",
@@ -22,6 +32,9 @@ const CATEGORY_LABEL_BY_SLUG = {
   "ovrigt": "Övrigt",
 };
 
+const productCacheById = new Map();
+const categoryCacheById = new Map();
+
 function getFirstTruthyValue(record, keys) {
   for (const key of keys) {
     if (record && record[key] !== undefined && record[key] !== null) {
@@ -34,6 +47,18 @@ function getFirstTruthyValue(record, keys) {
 
 function getItemListId(item) {
   return getFirstTruthyValue(item, LIST_REFERENCE_COLUMNS);
+}
+
+function getRealtimePayloadListId(payload) {
+  const row = payload?.new ?? payload?.old ?? null;
+
+  return String(
+    getFirstTruthyValue(row, [
+      ...LIST_REFERENCE_COLUMNS,
+      "list_id",
+      "shoppingListId",
+    ]) ?? "",
+  ).trim();
 }
 
 function normalizeCategorySlug(value) {
@@ -70,6 +95,12 @@ function normalizeCategoryName(value) {
 }
 
 function createListAccessError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function createListShareError(code, message) {
   const error = new Error(message);
   error.code = code;
   return error;
@@ -178,7 +209,7 @@ async function requireListAccess(listId, { allowMissing = false } = {}) {
   if (!userId) {
     throw createListAccessError(
       LIST_ACCESS_ERROR_CODES.UNAUTHENTICATED,
-      "You must be logged in to access this list.",
+      "Du måste vara inloggad för att komma åt den här listan.",
     );
   }
 
@@ -191,18 +222,97 @@ async function requireListAccess(listId, { allowMissing = false } = {}) {
 
     throw createListAccessError(
       LIST_ACCESS_ERROR_CODES.NOT_FOUND,
-      "Shopping list not found.",
+      "Inköpslistan hittades inte.",
     );
   }
 
   if (!context.hasAccess) {
     throw createListAccessError(
       LIST_ACCESS_ERROR_CODES.FORBIDDEN,
-      "You do not have access to this shopping list.",
+      "Du har inte åtkomst till den här inköpslistan.",
     );
   }
 
   return { userId, context };
+}
+
+async function requireListOwner(listId) {
+  const { userId, context } = await requireListAccess(listId);
+
+  if (!context.isOwner) {
+    throw createListShareError(
+      LIST_SHARE_ERROR_CODES.NOT_OWNER,
+      "Endast listägaren kan hantera medlemmar.",
+    );
+  }
+
+  return {
+    userId,
+    context,
+  };
+}
+
+function normalizeEmailAddress(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeListMemberRow(row) {
+  if (!row) {
+    return null;
+  }
+
+  const normalizedProfile = row.profile
+    ? {
+      id: row.profile.id,
+      email: String(row.profile.email ?? "").trim(),
+      name: String(row.profile.name ?? "").trim(),
+      created_at: row.profile.created_at ?? null,
+    }
+    : null;
+
+  return {
+    ...row,
+    id: row.id,
+    shopping_list_id: getFirstTruthyValue(row, ["shopping_list_id", "shoppingListId"]),
+    user_id: getFirstTruthyValue(row, ["user_id", "userId"]),
+    created_at: row.created_at ?? null,
+    profile: normalizedProfile,
+  };
+}
+
+async function findProfileByEmail(email) {
+  const normalizedEmail = normalizeEmailAddress(email);
+
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, name, created_at")
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? null;
+}
+
+async function getMembershipRow(listId, userId) {
+  const { data, error } = await supabase
+    .from("shopping_list_members")
+    .select("id, shopping_list_id, user_id")
+    .eq("shopping_list_id", listId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? null;
 }
 
 async function getListIdForItem(itemId) {
@@ -236,6 +346,175 @@ async function requireItemAccess(itemId) {
 export async function userHasAccessToList(listId, userId) {
   const context = await getListAccessContext(listId, userId);
   return context.listExists && context.hasAccess;
+}
+
+export async function getListSharingContext(listId) {
+  const { userId, context } = await requireListAccess(listId);
+
+  return {
+    listId: String(listId),
+    currentUserId: userId,
+    ownerId: context.ownerId,
+    isOwner: context.isOwner,
+    isMember: context.isMember,
+  };
+}
+
+export async function getListMembers(listId) {
+  const { context } = await requireListAccess(listId);
+
+  const ownerId = String(context.ownerId ?? "").trim();
+  let ownerProfile = null;
+
+  if (ownerId) {
+    const { data: ownerData, error: ownerError } = await supabase
+      .from("profiles")
+      .select("id, email, name, created_at")
+      .eq("id", ownerId)
+      .maybeSingle();
+
+    if (ownerError) {
+      throw ownerError;
+    }
+
+    ownerProfile = ownerData ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from("shopping_list_members")
+    .select("id, shopping_list_id, user_id")
+    .eq("shopping_list_id", String(listId))
+    .order("user_id", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  const rawMembers = data ?? [];
+  const memberUserIds = Array.from(
+    new Set(
+      rawMembers
+        .map((memberRow) => String(memberRow?.user_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  let profileByUserId = new Map();
+
+  if (memberUserIds.length > 0) {
+    const { data: memberProfiles, error: memberProfilesError } = await supabase
+      .from("profiles")
+      .select("id, email, name, created_at")
+      .in("id", memberUserIds);
+
+    if (memberProfilesError) {
+      throw memberProfilesError;
+    }
+
+    profileByUserId = new Map(
+      (memberProfiles ?? []).map((profile) => [String(profile.id), profile]),
+    );
+  }
+
+  const members = rawMembers
+    .map((memberRow) => normalizeListMemberRow({
+      ...memberRow,
+      profile: profileByUserId.get(String(memberRow.user_id)) ?? null,
+    }))
+    .filter(Boolean);
+
+  return {
+    owner: ownerProfile,
+    members,
+  };
+}
+
+export async function inviteListMemberByEmail(listId, email) {
+  const { context } = await requireListOwner(listId);
+
+  const normalizedEmail = normalizeEmailAddress(email);
+  const hasEmailShape = /^\S+@\S+\.\S+$/.test(normalizedEmail);
+
+  if (!normalizedEmail || !hasEmailShape) {
+    throw createListShareError(
+      LIST_SHARE_ERROR_CODES.INVALID_EMAIL,
+      "Ange en giltig e-postadress.",
+    );
+  }
+
+  const profile = await findProfileByEmail(normalizedEmail);
+
+  if (!profile?.id) {
+    throw createListShareError(
+      LIST_SHARE_ERROR_CODES.USER_NOT_FOUND,
+      "Användaren hittades inte. Be personen skapa konto först.",
+    );
+  }
+
+  const profileId = String(profile.id);
+
+  if (profileId === String(context.ownerId ?? "")) {
+    throw createListShareError(
+      LIST_SHARE_ERROR_CODES.OWNER_CANNOT_BE_MEMBER,
+      "Listägaren är redan medlem.",
+    );
+  }
+
+  const existingMembership = await getMembershipRow(String(listId), profileId);
+  if (existingMembership) {
+    throw createListShareError(
+      LIST_SHARE_ERROR_CODES.ALREADY_MEMBER,
+      "Användaren är redan medlem i listan.",
+    );
+  }
+
+  const payload = {
+    shopping_list_id: String(listId),
+    user_id: profileId,
+  };
+
+  const { data, error } = await supabase
+    .from("shopping_list_members")
+    .insert(payload)
+    .select("id, shopping_list_id, user_id")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return normalizeListMemberRow(data);
+}
+
+export async function removeListMember(listId, memberUserId) {
+  const { context } = await requireListOwner(listId);
+  const normalizedUserId = String(memberUserId ?? "").trim();
+
+  if (!normalizedUserId) {
+    throw createListShareError(
+      LIST_SHARE_ERROR_CODES.INVALID_USER,
+      "Ogiltig användare.",
+    );
+  }
+
+  if (normalizedUserId === String(context.ownerId ?? "")) {
+    throw createListShareError(
+      LIST_SHARE_ERROR_CODES.CANNOT_REMOVE_OWNER,
+      "Listägaren kan inte tas bort från listan.",
+    );
+  }
+
+  const { error } = await supabase
+    .from("shopping_list_members")
+    .delete()
+    .eq("shopping_list_id", String(listId))
+    .eq("user_id", normalizedUserId);
+
+  if (error) {
+    throw error;
+  }
+
+  return { removedUserId: normalizedUserId };
 }
 
 async function queryByPossibleColumns(queryFactory, candidateColumns, value) {
@@ -285,6 +564,77 @@ function normalizeCategoryOrder(categoryOrderRows) {
 
 function normalizeShoppingListStoreId(listRecord) {
   return getFirstTruthyValue(listRecord, ["store_id", "storeId"]);
+}
+
+async function hydrateShoppingListItems(itemRows) {
+  const items = itemRows ?? [];
+  const productIds = Array.from(new Set(
+    items
+      .map((item) => item.product_id)
+      .filter(Boolean),
+  ));
+
+  const missingProductIds = productIds.filter((id) => !productCacheById.has(id));
+
+  if (missingProductIds.length > 0) {
+    const { data: products, error: productsError } = await supabase
+      .from("products")
+      .select("id, name, category_id")
+      .in("id", missingProductIds);
+
+    if (productsError) {
+      throw productsError;
+    }
+
+    for (const product of products ?? []) {
+      productCacheById.set(product.id, product);
+    }
+  }
+
+  const categoryIds = Array.from(new Set(
+    productIds
+      .map((productId) => productCacheById.get(productId)?.category_id)
+      .filter(Boolean),
+  ));
+
+  const missingCategoryIds = categoryIds.filter((id) => !categoryCacheById.has(id));
+
+  if (missingCategoryIds.length > 0) {
+    const { data: categories, error: categoriesError } = await supabase
+      .from("categories")
+      .select("id, name")
+      .in("id", missingCategoryIds);
+
+    if (categoriesError) {
+      throw categoriesError;
+    }
+
+    for (const category of categories ?? []) {
+      categoryCacheById.set(category.id, category);
+    }
+  }
+
+  return items.map((item) => {
+    const product = item.product_id ? productCacheById.get(item.product_id) ?? null : null;
+    const categoryId = getFirstTruthyValue(item, ["category_id", "categoryId", "product_category_id"])
+      ?? product?.category_id
+      ?? null;
+
+    const category = categoryId ? categoryCacheById.get(categoryId) ?? null : null;
+    const categoryName = normalizeCategoryName(category?.name ?? item.category_name ?? product?.category_name);
+
+    return {
+      ...item,
+      shopping_list_id: getItemListId(item),
+      product,
+      category,
+      display_name: item.custom_name || product?.name || "Okänd vara",
+      category_name: categoryName,
+      is_checked: Boolean(item.is_checked),
+      notes: String(item.notes ?? ""),
+      is_custom: Boolean(item.custom_name && !item.product_id),
+    };
+  });
 }
 
 async function getShoppingListStoreId(listId) {
@@ -371,8 +721,10 @@ async function insertPurchaseHistoryEntry({ userId, storeId, productId, purchase
   }
 }
 
-export async function getShoppingListItems(listId) {
-  await requireListAccess(listId);
+export async function getShoppingListItems(listId, { skipAccessCheck = false } = {}) {
+  if (!skipAccessCheck) {
+    await requireListAccess(listId);
+  }
 
   const { data: itemRows } = await queryByPossibleColumns(
     (column, value) => supabase
@@ -383,73 +735,28 @@ export async function getShoppingListItems(listId) {
     listId,
   );
 
-  const items = itemRows ?? [];
-  const productIds = Array.from(new Set(
-    items
-      .map((item) => item.product_id)
-      .filter(Boolean),
-  ));
+  return hydrateShoppingListItems(itemRows ?? []);
+}
 
-  const productsById = new Map();
-  const categoriesById = new Map();
+export async function getShoppingListItemById(itemId) {
+  await requireItemAccess(itemId);
 
-  if (productIds.length > 0) {
-    const { data: products, error: productsError } = await supabase
-      .from("products")
-      .select("*")
-      .in("id", productIds);
+  const { data, error } = await supabase
+    .from("shopping_list_items")
+    .select("*")
+    .eq("id", itemId)
+    .maybeSingle();
 
-    if (productsError) {
-      throw productsError;
-    }
-
-    for (const product of products ?? []) {
-      productsById.set(product.id, product);
-    }
-
-    const categoryIds = Array.from(new Set(
-      (products ?? [])
-        .map((product) => product.category_id)
-        .filter(Boolean),
-    ));
-
-    if (categoryIds.length > 0) {
-      const { data: categories, error: categoriesError } = await supabase
-        .from("categories")
-        .select("*")
-        .in("id", categoryIds);
-
-      if (categoriesError) {
-        throw categoriesError;
-      }
-
-      for (const category of categories ?? []) {
-        categoriesById.set(category.id, category);
-      }
-    }
+  if (error) {
+    throw error;
   }
 
-  return items.map((item) => {
-    const product = item.product_id ? productsById.get(item.product_id) ?? null : null;
-    const categoryId = getFirstTruthyValue(item, ["category_id", "categoryId", "product_category_id"])
-      ?? product?.category_id
-      ?? null;
+  if (!data) {
+    return null;
+  }
 
-    const category = categoryId ? categoriesById.get(categoryId) ?? null : null;
-    const categoryName = normalizeCategoryName(category?.name ?? item.category_name ?? product?.category_name);
-
-    return {
-      ...item,
-      shopping_list_id: getItemListId(item),
-      product,
-      category,
-      display_name: item.custom_name || product?.name || "Okänd vara",
-      category_name: categoryName,
-      is_checked: Boolean(item.is_checked),
-      notes: String(item.notes ?? ""),
-      is_custom: Boolean(item.custom_name && !item.product_id),
-    };
-  });
+  const [item] = await hydrateShoppingListItems([data]);
+  return item ?? null;
 }
 
 export async function getShoppingList(listId) {
@@ -475,53 +782,46 @@ export async function getShoppingList(listId) {
 
   const list = normalizeListRecord(listData);
 
-  let store = null;
-  if (list.store_id) {
-    const { data: storeData, error: storeError } = await supabase
-      .from("stores")
-      .select("*")
-      .eq("id", list.store_id)
-      .maybeSingle();
+  const [storeResult, layoutResult, categoryOrderResult, items] = await Promise.all([
+    list.store_id
+      ? supabase
+        .from("stores")
+        .select("*")
+        .eq("id", list.store_id)
+        .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    list.store_layout_id
+      ? supabase
+        .from("store_layouts")
+        .select("*")
+        .eq("id", list.store_layout_id)
+        .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    list.store_layout_id
+      ? supabase
+        .from("store_category_order")
+        .select("layout_id, category_id, display_order")
+        .eq("layout_id", list.store_layout_id)
+        .order("display_order", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    getShoppingListItems(listId, { skipAccessCheck: true }),
+  ]);
 
-    if (storeError) {
-      throw storeError;
-    }
-
-    store = storeData ?? null;
+  if (storeResult.error) {
+    throw storeResult.error;
   }
 
-  let layout = null;
-  if (list.store_layout_id) {
-    const { data: layoutData, error: layoutError } = await supabase
-      .from("store_layouts")
-      .select("*")
-      .eq("id", list.store_layout_id)
-      .maybeSingle();
-
-    if (layoutError) {
-      throw layoutError;
-    }
-
-    layout = layoutData ?? null;
+  if (layoutResult.error) {
+    throw layoutResult.error;
   }
 
-  let categoryOrder = [];
-
-  if (list.store_layout_id) {
-    const { data: categoryOrderRows, error: categoryOrderError } = await supabase
-      .from("store_category_order")
-      .select("layout_id, category_id, display_order")
-      .eq("layout_id", list.store_layout_id)
-      .order("display_order", { ascending: true });
-
-    if (categoryOrderError) {
-      throw categoryOrderError;
-    }
-
-    categoryOrder = normalizeCategoryOrder(categoryOrderRows ?? []);
+  if (categoryOrderResult.error) {
+    throw categoryOrderResult.error;
   }
 
-  const items = await getShoppingListItems(listId);
+  const store = storeResult.data ?? null;
+  const layout = layoutResult.data ?? null;
+  const categoryOrder = normalizeCategoryOrder(categoryOrderResult.data ?? []);
 
   return {
     ...list,
@@ -963,4 +1263,121 @@ export async function updateShoppingListStoreAndLayout(listId, { storeId, layout
   }
 
   throw lastError;
+}
+
+export function subscribeToShoppingListItems(listId, {
+  onInsert,
+  onUpdate,
+  onDelete,
+  onStatus,
+  onError,
+} = {}) {
+  if (!supabase) {
+    onStatus?.("CLOSED");
+    return () => {};
+  }
+
+  const normalizedListId = String(listId ?? "").trim();
+
+  if (!normalizedListId) {
+    onStatus?.("CLOSED");
+    return () => {};
+  }
+
+  const channel = supabase
+    .channel(`shopping-list-items-${normalizedListId}-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "shopping_list_items",
+      },
+      (payload) => {
+        const payloadListId = getRealtimePayloadListId(payload);
+
+        if (payload?.eventType === "DELETE" && !payloadListId) {
+          onDelete?.(payload);
+          return;
+        }
+
+        if (payloadListId !== normalizedListId) {
+          return;
+        }
+
+        if (payload?.eventType === "INSERT") {
+          onInsert?.(payload);
+          return;
+        }
+
+        if (payload?.eventType === "UPDATE") {
+          onUpdate?.(payload);
+          return;
+        }
+
+        if (payload?.eventType === "DELETE") {
+          onDelete?.(payload);
+        }
+      },
+    )
+    .subscribe((status, error) => {
+      onStatus?.(status);
+
+      if (error) {
+        onError?.(error);
+      }
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+export function subscribeToShoppingListMeta(listId, {
+  onUpdate,
+  onStatus,
+  onError,
+} = {}) {
+  if (!supabase) {
+    onStatus?.("CLOSED");
+    return () => {};
+  }
+
+  const normalizedListId = String(listId ?? "").trim();
+
+  if (!normalizedListId) {
+    onStatus?.("CLOSED");
+    return () => {};
+  }
+
+  const channel = supabase
+    .channel(`shopping-list-meta-${normalizedListId}-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "shopping_lists",
+      },
+      (payload) => {
+        const payloadListId = String(payload?.new?.id ?? payload?.old?.id ?? "").trim();
+
+        if (payloadListId !== normalizedListId) {
+          return;
+        }
+
+        onUpdate?.(payload);
+      },
+    )
+    .subscribe((status, error) => {
+      onStatus?.(status);
+
+      if (error) {
+        onError?.(error);
+      }
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }

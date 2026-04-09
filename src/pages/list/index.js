@@ -3,13 +3,21 @@ import {
 	addShoppingListItem,
 	deleteListItem,
 	findOrCreateStore,
+	getListMembers,
+	getListSharingContext,
+	getShoppingListItemById,
 	getShoppingList,
 	getShoppingListItems,
 	LIST_ACCESS_ERROR_CODES,
+	LIST_SHARE_ERROR_CODES,
 	getStores,
 	getStoreLayouts,
 	getSuggestedProducts,
+	inviteListMemberByEmail,
+	removeListMember,
 	searchProducts,
+	subscribeToShoppingListItems,
+	subscribeToShoppingListMeta,
 	toggleItemChecked,
 	updateItemNotes,
 	updateShoppingListTitle,
@@ -35,6 +43,7 @@ const state = {
 	noteSaveTimers: new Map(),
 	storeLayouts: [],
 	allStores: [],
+	isStoresLoading: false,
 	availableCities: [],
 	cityQuery: "",
 	filteredCities: [],
@@ -59,9 +68,27 @@ const state = {
 	isTitleSaving: false,
 	titleDraft: "",
 	titleError: "",
+	activeView: "list",
+	shareContext: null,
+	shareOwner: null,
+	shareMembers: [],
+	isShareLoading: false,
+	shareError: "",
+	shareInviteEmail: "",
+	shareInviteError: "",
+	shareInviteSuccess: "",
+	isShareInviting: false,
+	shareRemovingUserId: "",
+	unsubscribeRealtimeItems: null,
+	unsubscribeRealtimeListMeta: null,
+	realtimeConnected: false,
+	pollingTimer: null,
+	lastRealtimeCommitTimestampByItemId: new Map(),
+	listLoadVersion: 0,
 };
 
 const MAX_VISIBLE_SEARCH_RESULTS = 6;
+const POLLING_INTERVAL_MS = 8000;
 
 let pageEventController;
 
@@ -75,6 +102,7 @@ function escapeHtml(value) {
 }
 
 function resetTransientState() {
+	state.listLoadVersion += 1;
 	state.searchQuery = "";
 	state.searchResults = [];
 	state.isSearchingProducts = false;
@@ -102,11 +130,119 @@ function resetTransientState() {
 	state.isStoreEditorSaving = false;
 	state.storeEditorError = "";
 	state.toggleRequestVersionByItemId = new Map();
+	state.activeView = "list";
+	state.shareContext = null;
+	state.shareOwner = null;
+	state.shareMembers = [];
+	state.isShareLoading = false;
+	state.shareError = "";
+	state.shareInviteEmail = "";
+	state.shareInviteError = "";
+	state.shareInviteSuccess = "";
+	state.isShareInviting = false;
+	state.shareRemovingUserId = "";
 
 	if (state.suggestionsRefreshTimer) {
 		clearTimeout(state.suggestionsRefreshTimer);
 		state.suggestionsRefreshTimer = null;
 	}
+
+	if (state.pollingTimer) {
+		clearInterval(state.pollingTimer);
+		state.pollingTimer = null;
+	}
+
+	if (typeof state.unsubscribeRealtimeItems === "function") {
+		state.unsubscribeRealtimeItems();
+	}
+
+	if (typeof state.unsubscribeRealtimeListMeta === "function") {
+		state.unsubscribeRealtimeListMeta();
+	}
+
+	state.unsubscribeRealtimeItems = null;
+	state.unsubscribeRealtimeListMeta = null;
+	state.realtimeConnected = false;
+	state.lastRealtimeCommitTimestampByItemId = new Map();
+}
+
+function getRealtimeTimestampValue(value) {
+	const parsed = Date.parse(String(value ?? ""));
+	return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function upsertItemById(nextItem) {
+	const nextId = String(nextItem?.id ?? "").trim();
+	if (!nextId) {
+		return false;
+	}
+
+	const existingIndex = state.items.findIndex((item) => String(item.id) === nextId);
+
+	if (existingIndex === -1) {
+		state.items = [...state.items, nextItem];
+		return true;
+	}
+
+	state.items = state.items.map((item, index) => (index === existingIndex ? {
+		...item,
+		...nextItem,
+	} : item));
+
+	return true;
+}
+
+async function ensureStoresLoaded() {
+	if (state.isStoresLoading || state.allStores.length > 0) {
+		return;
+	}
+
+	state.isStoresLoading = true;
+	renderTitleAndStore();
+
+	try {
+		state.allStores = await getStores();
+		state.availableCities = buildAvailableCities(state.allStores);
+
+		if (!state.cityQuery && state.availableCities.length > 0) {
+			state.cityQuery = state.availableCities[0];
+		}
+
+		updateStoresForSelectedCity();
+	} catch (error) {
+		console.error("Load stores failed", error);
+	} finally {
+		state.isStoresLoading = false;
+		renderTitleAndStore();
+	}
+}
+
+function startPollingFallback() {
+	if (state.pollingTimer) {
+		return;
+	}
+
+	state.pollingTimer = setInterval(async () => {
+		if (!state.listId || state.isLoading) {
+			return;
+		}
+
+		try {
+			await refreshItemsAndSuggestions({ includeSuggestions: false });
+			renderAll();
+		} catch (error) {
+			console.error("Polling refresh failed", error);
+		}
+	}, POLLING_INTERVAL_MS);
+}
+
+function stopPollingFallback() {
+	if (!state.pollingTimer) {
+		return;
+	}
+
+	clearInterval(state.pollingTimer);
+	state.pollingTimer = null;
 }
 
 function buildAvailableCities(stores) {
@@ -382,7 +518,7 @@ function buildSearchOptions() {
 			? [{
 				id: "custom-option",
 				type: "custom",
-				label: `Lägg till \"${trimmedQuery}\" som Okategoriserat`,
+				label: `Lägg till "${trimmedQuery}" som Okategoriserat`,
 				customName: trimmedQuery,
 			}]
 			: []),
@@ -832,7 +968,9 @@ function renderTitleAndStore() {
 
 	if (storeOptionsContainer) {
 		// Only show stores if a city is selected
-		if (!state.cityQuery.trim()) {
+		if (state.isStoresLoading) {
+			storeOptionsContainer.innerHTML = '<p class="list-page__status">Laddar butiker...</p>';
+		} else if (!state.cityQuery.trim()) {
 			storeOptionsContainer.innerHTML = "";
 		} else if (state.isCreatingStore) {
 			// Show form to create new store
@@ -965,32 +1103,560 @@ function renderTitleAndStore() {
 	}
 }
 
-function renderAll() {
-	renderTitleAndStore();
-	renderProductSearchResults();
-	renderSuggestions();
-	renderGroups();
+function getShareOwnerDisplayName() {
+	const ownerName = String(state.shareOwner?.name ?? "").trim();
+	if (ownerName) {
+		return ownerName;
+	}
+
+	const ownerEmail = String(state.shareOwner?.email ?? "").trim();
+	if (ownerEmail) {
+		return ownerEmail;
+	}
+
+	return "Okänd ägare";
 }
 
-async function refreshItemsAndSuggestions() {
+function getShareMemberDisplayName(member) {
+	const profileName = String(member?.profile?.name ?? "").trim();
+	if (profileName) {
+		return profileName;
+	}
+
+	const profileEmail = String(member?.profile?.email ?? "").trim();
+	if (profileEmail) {
+		return profileEmail;
+	}
+
+	return "Inaktiv användare";
+}
+
+function mapShareInviteError(error) {
+	if (!error?.code) {
+		return "Kunde inte bjuda in användaren. Försök igen.";
+	}
+
+	if (error.code === LIST_SHARE_ERROR_CODES.INVALID_EMAIL) {
+		return "Ange en giltig e-postadress.";
+	}
+
+	if (error.code === LIST_SHARE_ERROR_CODES.USER_NOT_FOUND) {
+		return "Ingen användare hittades för den e-postadressen. Be personen skapa konto först.";
+	}
+
+	if (error.code === LIST_SHARE_ERROR_CODES.ALREADY_MEMBER) {
+		return "Användaren är redan medlem i listan.";
+	}
+
+	if (error.code === LIST_SHARE_ERROR_CODES.OWNER_CANNOT_BE_MEMBER) {
+		return "Listägaren är redan medlem i listan.";
+	}
+
+	if (error.code === LIST_SHARE_ERROR_CODES.NOT_OWNER) {
+		return "Endast listägaren kan bjuda in medlemmar.";
+	}
+
+	return "Kunde inte bjuda in användaren. Försök igen.";
+}
+
+function mapShareRemovalError(error) {
+	if (!error?.code) {
+		return "Kunde inte ta bort medlemmen. Försök igen.";
+	}
+
+	if (error.code === LIST_SHARE_ERROR_CODES.CANNOT_REMOVE_OWNER) {
+		return "Listägaren kan inte tas bort.";
+	}
+
+	if (error.code === LIST_SHARE_ERROR_CODES.NOT_OWNER) {
+		return "Endast listägaren kan ta bort medlemmar.";
+	}
+
+	return "Kunde inte ta bort medlemmen. Försök igen.";
+}
+
+function renderShareManagement() {
+	const shareSection = document.querySelector("#list-share-management");
+	if (!shareSection) {
+		return;
+	}
+
+	const isShareView = state.activeView === "share";
+	shareSection.hidden = !isShareView;
+
+	if (!isShareView) {
+		shareSection.innerHTML = "";
+		return;
+	}
+
+	if (state.isShareLoading) {
+		shareSection.innerHTML = '<p class="list-page__status">Laddar delningsinställningar...</p>';
+		return;
+	}
+
+	if (state.shareError) {
+		shareSection.innerHTML = `<p class="list-page__status list-page__status--error">${escapeHtml(state.shareError)}</p>`;
+		return;
+	}
+
+	const isOwner = Boolean(state.shareContext?.isOwner);
+	const ownerName = getShareOwnerDisplayName();
+	const ownerEmail = String(state.shareOwner?.email ?? "").trim();
+	const membersMarkup = state.shareMembers.length
+		? state.shareMembers.map((member) => {
+			const memberId = String(member.user_id ?? "");
+			const memberName = getShareMemberDisplayName(member);
+			const memberEmail = String(member?.profile?.email ?? "").trim();
+			const isRemoving = state.shareRemovingUserId === memberId;
+
+			return `
+				<li class="list-page__member-row">
+					<div class="list-page__member-main">
+						<span class="list-page__member-name">${escapeHtml(memberName)}</span>
+						<span class="list-page__member-meta">${escapeHtml(memberEmail || "E-post saknas")}</span>
+					</div>
+					${isOwner
+						? `
+							<button
+								type="button"
+								class="btn btn-secondary list-page__member-remove"
+								data-share-remove-member-id="${escapeHtml(memberId)}"
+								${isRemoving ? "disabled" : ""}
+							>
+								${isRemoving ? "Tar bort..." : "Ta bort"}
+							</button>
+						`
+						: ""
+					}
+				</li>
+			`;
+		}).join("")
+		: '<li class="list-page__member-empty">Inga medlemmar tillagda än.</li>';
+
+	shareSection.innerHTML = `
+		<section class="card list-page__share-panel">
+			<h2 class="list-page__section-title"><span>Medlemmar</span></h2>
+			<ul class="list-page__members" role="list">
+				<li class="list-page__member-row list-page__member-row--owner">
+					<div class="list-page__member-main">
+						<span class="list-page__member-name">${escapeHtml(ownerName)}</span>
+						<span class="list-page__member-meta">${escapeHtml(ownerEmail || "E-post saknas")}</span>
+					</div>
+					<span class="status-badge status-info">Ägare</span>
+				</li>
+				${membersMarkup}
+			</ul>
+		</section>
+
+		<section class="card list-page__share-panel">
+			<h2 class="list-page__section-title"><span>Bjud in via e-post</span></h2>
+			<p class="list-page__status">
+				${isOwner
+					? "Personen måste redan ha ett konto för att kunna läggas till i listan."
+					: "Endast listägaren kan bjuda in och ta bort medlemmar."
+				}
+			</p>
+			<form id="list-share-invite-form" class="list-page__share-invite-form" novalidate>
+				<div class="list-page__share-invite-row">
+					<input
+						id="list-share-email-input"
+						class="input-field"
+						type="email"
+						placeholder="name@example.com"
+						autocomplete="email"
+						value="${escapeHtml(state.shareInviteEmail)}"
+						${isOwner ? "" : "disabled"}
+						required
+					/>
+					<button
+						type="submit"
+						class="btn btn-primary"
+						${isOwner && !state.isShareInviting ? "" : "disabled"}
+					>
+							${state.isShareInviting ? "Bjuder in..." : "Bjud in"}
+					</button>
+				</div>
+			</form>
+			${state.shareInviteError
+				? `<p class="list-page__status list-page__status--error" aria-live="polite">${escapeHtml(state.shareInviteError)}</p>`
+				: ""
+			}
+			${state.shareInviteSuccess
+				? `<p class="list-page__status list-page__status--success" aria-live="polite">${escapeHtml(state.shareInviteSuccess)}</p>`
+				: ""
+			}
+		</section>
+	`;
+}
+
+async function refreshSharingData() {
 	if (!state.listId) {
 		return;
 	}
 
-	const [items, suggestions] = await Promise.all([
-		getShoppingListItems(state.listId),
-		getSuggestedProducts(
+	state.isShareLoading = true;
+	state.shareError = "";
+	renderShareManagement();
+
+	try {
+		const [shareContext, membersResult] = await Promise.all([
+			getListSharingContext(state.listId),
+			getListMembers(state.listId),
+		]);
+
+		state.shareContext = shareContext;
+		state.shareOwner = membersResult.owner;
+		state.shareMembers = membersResult.members;
+	} catch (error) {
+		if (error?.code === LIST_ACCESS_ERROR_CODES.UNAUTHENTICATED) {
+			navigateTo("/login", { replace: true });
+			return;
+		}
+
+		if (error?.code === LIST_ACCESS_ERROR_CODES.FORBIDDEN) {
+			navigateTo("/", { replace: true });
+			return;
+		}
+
+		state.shareError = "Kunde inte ladda listans medlemmar.";
+		console.error("Load share data failed", error);
+	} finally {
+		state.isShareLoading = false;
+		renderShareManagement();
+	}
+}
+
+function setActiveView(nextView) {
+	const normalizedView = nextView === "share" ? "share" : "list";
+
+	if (state.activeView === normalizedView) {
+		return;
+	}
+
+	state.activeView = normalizedView;
+	state.shareInviteError = "";
+	state.shareInviteSuccess = "";
+	renderAll();
+
+	if (state.activeView === "share") {
+		void refreshSharingData();
+	}
+}
+
+async function handleShareInviteSubmit() {
+	if (!state.listId || state.isShareInviting) {
+		return;
+	}
+
+	state.isShareInviting = true;
+	state.shareInviteError = "";
+	state.shareInviteSuccess = "";
+	renderShareManagement();
+
+	try {
+		await inviteListMemberByEmail(state.listId, state.shareInviteEmail);
+		state.shareInviteEmail = "";
+		state.shareInviteSuccess = "Användaren är nu medlem i listan.";
+		await refreshSharingData();
+	} catch (error) {
+		state.shareInviteError = mapShareInviteError(error);
+		console.error("Invite member failed", error);
+	} finally {
+		state.isShareInviting = false;
+		renderShareManagement();
+	}
+}
+
+async function handleShareMemberRemoval(memberUserId) {
+	if (!state.listId) {
+		return;
+	}
+
+	const normalizedUserId = String(memberUserId ?? "").trim();
+	if (!normalizedUserId) {
+		return;
+	}
+
+	state.shareRemovingUserId = normalizedUserId;
+	state.shareInviteError = "";
+	state.shareInviteSuccess = "";
+	renderShareManagement();
+
+	try {
+		await removeListMember(state.listId, normalizedUserId);
+		state.shareInviteSuccess = "Medlemmen togs bort fran listan.";
+		await refreshSharingData();
+	} catch (error) {
+		state.shareInviteError = mapShareRemovalError(error);
+		console.error("Remove member failed", error);
+	} finally {
+		state.shareRemovingUserId = "";
+		renderShareManagement();
+	}
+}
+
+function renderAll() {
+	const isShareView = state.activeView === "share";
+	const storeWrap = document.querySelector(".list-page__store-subheader-wrap");
+	const storePanel = document.querySelector("#list-store-editor");
+	const storeOverlay = document.querySelector("#list-store-overlay");
+	const searchCard = document.querySelector(".list-page__search-card");
+	const suggestionsSection = document.querySelector("#list-suggestions-section");
+	const groupsSection = document.querySelector("#list-grouped-items");
+	const shareButton = document.querySelector("#list-share-button");
+
+	if (storeWrap) {
+		storeWrap.hidden = isShareView;
+		storeWrap.style.display = isShareView ? "none" : "";
+	}
+
+	if (storePanel) {
+		storePanel.hidden = isShareView;
+		storePanel.style.display = isShareView ? "none" : "";
+	}
+
+	if (storeOverlay) {
+		storeOverlay.hidden = isShareView;
+		storeOverlay.style.display = isShareView ? "none" : "";
+	}
+
+	if (searchCard) {
+		searchCard.hidden = isShareView;
+		searchCard.style.display = isShareView ? "none" : "";
+		searchCard.setAttribute("aria-hidden", isShareView ? "true" : "false");
+	}
+
+	if (suggestionsSection) {
+		suggestionsSection.hidden = isShareView;
+		suggestionsSection.style.display = isShareView ? "none" : "";
+	}
+
+	if (groupsSection) {
+		groupsSection.hidden = isShareView;
+		groupsSection.style.display = isShareView ? "none" : "";
+	}
+
+	const shareSection = document.querySelector("#list-share-management");
+	if (shareSection) {
+		shareSection.style.display = isShareView ? "flex" : "none";
+	}
+
+	if (shareButton) {
+		shareButton.setAttribute("aria-pressed", isShareView ? "true" : "false");
+		shareButton.innerHTML = isShareView
+			? '<i class="ti ti-list" aria-hidden="true"></i>'
+			: '<i class="ti ti-users" aria-hidden="true"></i>';
+		shareButton.setAttribute("aria-label", isShareView ? "Visa inkopslista" : "Hantera delning");
+	}
+
+	renderTitleAndStore();
+	renderProductSearchResults();
+	renderSuggestions();
+	renderGroups();
+	renderShareManagement();
+}
+
+async function refreshItemsAndSuggestions({ includeSuggestions = true } = {}) {
+	if (!state.listId) {
+		return;
+	}
+
+	const itemsPromise = getShoppingListItems(state.listId);
+	const suggestionsPromise = includeSuggestions
+		? getSuggestedProducts(
 			{ ...(state.list ?? {}), items: state.items },
 			Array.from(state.dismissedSuggestionIds),
-		),
-	]);
+		)
+		: Promise.resolve(state.suggestions);
+
+	const [items, suggestions] = await Promise.all([itemsPromise, suggestionsPromise]);
 
 	state.items = items;
 	state.list = { ...(state.list ?? {}), items };
-	state.suggestions = suggestions;
-	state.suggestions = state.suggestions.filter(
-		(product) => !items.some((item) => String(item.product_id) === String(product.id)),
-	);
+
+	if (includeSuggestions) {
+		state.suggestions = suggestions.filter(
+			(product) => !items.some((item) => String(item.product_id) === String(product.id)),
+		);
+	}
+}
+
+async function refreshSuggestionsInBackground(expectedLoadVersion = state.listLoadVersion) {
+	if (!state.list) {
+		return;
+	}
+
+	try {
+		const suggestions = await getSuggestedProducts(
+			{ ...(state.list ?? {}), items: state.items },
+			Array.from(state.dismissedSuggestionIds),
+		);
+
+		if (expectedLoadVersion !== state.listLoadVersion) {
+			return;
+		}
+
+		state.suggestions = suggestions.filter(
+			(product) => !state.items.some((item) => String(item.product_id) === String(product.id)),
+		);
+		renderSuggestions();
+	} catch (error) {
+		if (expectedLoadVersion !== state.listLoadVersion) {
+			return;
+		}
+
+		console.error("Refresh suggestions failed", error);
+	}
+}
+
+async function handleRealtimeItemChange(payload) {
+	if (!state.listId) {
+		return;
+	}
+
+	const eventType = String(payload?.eventType ?? "");
+	const commitTimestamp = getRealtimeTimestampValue(payload?.commit_timestamp);
+
+	if (eventType === "DELETE") {
+		const deletedId = String(payload?.old?.id ?? "").trim();
+		if (!deletedId) {
+			return;
+		}
+
+		const beforeLength = state.items.length;
+		state.items = state.items.filter((item) => String(item.id) !== deletedId);
+
+		if (state.items.length !== beforeLength) {
+			state.list = { ...(state.list ?? {}), items: state.items };
+			renderGroups();
+			queueSuggestionsRefresh();
+		}
+
+		return;
+	}
+
+	const updatedItemId = String(payload?.new?.id ?? "").trim();
+	if (!updatedItemId) {
+		return;
+	}
+
+	const previousCommitTimestamp = state.lastRealtimeCommitTimestampByItemId.get(updatedItemId) ?? 0;
+	if (commitTimestamp && previousCommitTimestamp && commitTimestamp < previousCommitTimestamp) {
+		return;
+	}
+
+	if (commitTimestamp) {
+		state.lastRealtimeCommitTimestampByItemId.set(updatedItemId, commitTimestamp);
+	}
+
+	try {
+		const hydratedItem = await getShoppingListItemById(updatedItemId);
+
+		if (!hydratedItem) {
+			return;
+		}
+
+		if (!upsertItemById(hydratedItem)) {
+			return;
+		}
+
+		state.list = { ...(state.list ?? {}), items: state.items };
+		renderGroups();
+		queueSuggestionsRefresh();
+	} catch (error) {
+		console.error("Realtime item update failed", error);
+	}
+}
+
+async function handleRealtimeListChange() {
+	if (!state.listId) {
+		return;
+	}
+
+	try {
+		const latestList = await getShoppingList(state.listId);
+
+		if (!latestList) {
+			return;
+		}
+
+		state.list = latestList;
+		state.items = latestList.items ?? [];
+		state.selectedStoreId = String(latestList.store_id ?? latestList.store?.id ?? "");
+		state.selectedLayoutId = String(latestList.store_layout_id ?? latestList.layout?.id ?? "");
+		state.cityQuery = String(latestList.store?.city ?? state.cityQuery ?? "");
+
+		if (state.allStores.length > 0) {
+			updateStoresForSelectedCity();
+		}
+
+		renderAll();
+		queueSuggestionsRefresh();
+	} catch (error) {
+		console.error("Realtime list update failed", error);
+	}
+}
+
+function startRealtimeSync(listId) {
+	if (!listId) {
+		startPollingFallback();
+		return;
+	}
+
+	if (typeof state.unsubscribeRealtimeItems === "function") {
+		state.unsubscribeRealtimeItems();
+	}
+
+	if (typeof state.unsubscribeRealtimeListMeta === "function") {
+		state.unsubscribeRealtimeListMeta();
+	}
+
+	state.unsubscribeRealtimeItems = null;
+	state.unsubscribeRealtimeListMeta = null;
+
+	state.realtimeConnected = false;
+	startPollingFallback();
+
+	const handleRealtimeStatus = (status) => {
+		console.info("[list realtime] status", { listId, status });
+
+		if (status === "SUBSCRIBED") {
+			state.realtimeConnected = true;
+			stopPollingFallback();
+			return;
+		}
+
+		if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
+			state.realtimeConnected = false;
+			startPollingFallback();
+		}
+	};
+
+	state.unsubscribeRealtimeItems = subscribeToShoppingListItems(listId, {
+		onInsert: (payload) => {
+			void handleRealtimeItemChange(payload);
+		},
+		onUpdate: (payload) => {
+			void handleRealtimeItemChange(payload);
+		},
+		onDelete: (payload) => {
+			void handleRealtimeItemChange(payload);
+		},
+		onStatus: handleRealtimeStatus,
+		onError: (error) => {
+			console.error("Realtime item subscription error", error);
+		},
+	});
+
+	state.unsubscribeRealtimeListMeta = subscribeToShoppingListMeta(listId, {
+		onUpdate: () => {
+			void handleRealtimeListChange();
+		},
+		onStatus: handleRealtimeStatus,
+		onError: (error) => {
+			console.error("Realtime list subscription error", error);
+		},
+	});
 }
 
 function queueSuggestionsRefresh() {
@@ -998,34 +1664,25 @@ function queueSuggestionsRefresh() {
 		clearTimeout(state.suggestionsRefreshTimer);
 	}
 
-	state.suggestionsRefreshTimer = setTimeout(async () => {
-		if (!state.list) {
-			return;
-		}
-
-		try {
-			state.suggestions = await getSuggestedProducts(
-				state.list,
-				Array.from(state.dismissedSuggestionIds),
-			);
-			renderSuggestions();
-		} catch (error) {
-			console.error("Refresh suggestions failed", error);
-		}
+	state.suggestionsRefreshTimer = setTimeout(() => {
+		void refreshSuggestionsInBackground(state.listLoadVersion);
 	}, 300);
 }
 
 async function loadListPageData(listId) {
+	const loadVersion = state.listLoadVersion + 1;
+	state.listLoadVersion = loadVersion;
 	state.isLoading = true;
 	state.loadError = "";
 	state.listId = listId;
 	renderAll();
 
 	try {
-		const [list, stores] = await Promise.all([
-			getShoppingList(listId),
-			getStores(),
-		]);
+		const list = await getShoppingList(listId);
+
+		if (loadVersion !== state.listLoadVersion) {
+			return;
+		}
 
 		if (!list) {
 			state.loadError = "Listan kunde inte hittas.";
@@ -1041,21 +1698,26 @@ async function loadListPageData(listId) {
 		state.isTitleSaving = false;
 		state.titleDraft = "";
 		state.titleError = "";
-		state.allStores = stores ?? [];
-		state.availableCities = buildAvailableCities(state.allStores);
 		state.selectedStoreId = String(list.store_id ?? list.store?.id ?? "");
 		state.selectedLayoutId = String(list.store_layout_id ?? list.layout?.id ?? "");
-		state.cityQuery = String(list.store?.city ?? state.availableCities[0] ?? "");
-		updateStoresForSelectedCity();
+		state.cityQuery = String(list.store?.city ?? state.cityQuery ?? "");
+
+		if (state.allStores.length > 0) {
+			state.availableCities = buildAvailableCities(state.allStores);
+			updateStoresForSelectedCity();
+		} else {
+			state.storeResults = [];
+			state.filteredStoreResults = [];
+		}
 
 		if (!state.selectedStoreId && state.storeResults.length === 1) {
 			state.selectedStoreId = String(state.storeResults[0].id);
 		}
 
-		state.storeLayouts = state.selectedStoreId
-			? await getStoreLayouts(state.selectedStoreId)
-			: [];
-		state.suggestions = await getSuggestedProducts(list, Array.from(state.dismissedSuggestionIds));
+		state.storeLayouts = [];
+		state.suggestions = [];
+		startRealtimeSync(listId);
+		void refreshSuggestionsInBackground(loadVersion);
 	} catch (error) {
 		if (error?.code === LIST_ACCESS_ERROR_CODES.UNAUTHENTICATED) {
 			navigateTo("/login", { replace: true });
@@ -1078,8 +1740,10 @@ async function loadListPageData(listId) {
 		state.loadError = "Kunde inte ladda listan.";
 		console.error("Failed to load shopping list page", error);
 	} finally {
-		state.isLoading = false;
-		renderAll();
+		if (loadVersion === state.listLoadVersion) {
+			state.isLoading = false;
+			renderAll();
+		}
 	}
 }
 
@@ -1108,6 +1772,14 @@ async function refreshStoreLayoutsForSelectedStore() {
 	}
 
 	renderTitleAndStore();
+}
+
+async function ensureStoreEditorDataReady() {
+	await ensureStoresLoaded();
+
+	if (state.selectedStoreId && state.storeLayouts.length === 0) {
+		await refreshStoreLayoutsForSelectedStore();
+	}
 }
 
 async function handleCitySelection(cityName) {
@@ -1272,16 +1944,46 @@ function resetSearchAddItemUI({ keepFocus = true } = {}) {
 	}
 }
 
+function getKnownProductById(productId) {
+	const normalizedId = String(productId ?? "");
+
+	return state.searchResults.find((product) => String(product.id) === normalizedId)
+		?? state.suggestions.find((product) => String(product.id) === normalizedId)
+		?? null;
+}
+
 async function handleAddProductToList(productId) {
 	if (!state.listId) {
 		return;
 	}
 
 	try {
-		await addShoppingListItem(state.listId, { productId });
-		await refreshItemsAndSuggestions();
+		const insertedItem = await addShoppingListItem(state.listId, { productId });
+		const hydratedItem = insertedItem?.id ? await getShoppingListItemById(insertedItem.id) : null;
+
+		if (hydratedItem) {
+			upsertItemById(hydratedItem);
+		} else {
+			const product = getKnownProductById(productId);
+			upsertItemById({
+				...(insertedItem ?? {}),
+				shopping_list_id: state.listId,
+				product_id: productId,
+				product,
+				category: null,
+				display_name: String(product?.name ?? "Ny vara"),
+				category_name: "Diverse",
+				is_checked: false,
+				notes: "",
+				is_custom: false,
+			});
+		}
+
+		state.list = { ...(state.list ?? {}), items: state.items };
+		queueSuggestionsRefresh();
 		resetSearchAddItemUI({ keepFocus: true });
-		renderAll();
+		renderGroups();
+		renderSuggestions();
 	} catch (error) {
 		console.error("Add item failed", error);
 	}
@@ -1299,10 +2001,31 @@ async function handleAddCustomItemToList(customName) {
 	}
 
 	try {
-		await addShoppingListItem(state.listId, { customName: trimmedCustomName });
-		await refreshItemsAndSuggestions();
+		const insertedItem = await addShoppingListItem(state.listId, { customName: trimmedCustomName });
+		const hydratedItem = insertedItem?.id ? await getShoppingListItemById(insertedItem.id) : null;
+
+		if (hydratedItem) {
+			upsertItemById(hydratedItem);
+		} else {
+			upsertItemById({
+				...(insertedItem ?? {}),
+				shopping_list_id: state.listId,
+				product_id: null,
+				product: null,
+				category: null,
+				display_name: trimmedCustomName,
+				category_name: "Diverse",
+				is_checked: false,
+				notes: "",
+				is_custom: true,
+			});
+		}
+
+		state.list = { ...(state.list ?? {}), items: state.items };
+		queueSuggestionsRefresh();
 		resetSearchAddItemUI({ keepFocus: true });
-		renderAll();
+		renderGroups();
+		renderSuggestions();
 	} catch (error) {
 		console.error("Add custom item failed", error);
 	}
@@ -1360,8 +2083,9 @@ async function handleDeleteItem(itemId) {
 	try {
 		await deleteListItem(itemId);
 		state.items = state.items.filter((item) => String(item.id) !== String(itemId));
-		await refreshItemsAndSuggestions();
-		renderAll();
+		state.list = { ...(state.list ?? {}), items: state.items };
+		queueSuggestionsRefresh();
+		renderGroups();
 	} catch (error) {
 		console.error("Delete item failed", error);
 	}
@@ -1448,7 +2172,28 @@ function initShoppingListPage(path) {
 
 			const backButton = target.closest("#list-back-button");
 			if (backButton) {
+				if (state.activeView === "share") {
+					setActiveView("list");
+					return;
+				}
+
 				navigateTo("/");
+				return;
+			}
+
+			const shareButton = target.closest("#list-share-button");
+			if (shareButton) {
+				setActiveView(state.activeView === "share" ? "list" : "share");
+				return;
+			}
+
+			const removeMemberButton = target.closest("[data-share-remove-member-id]");
+			if (removeMemberButton?.dataset.shareRemoveMemberId) {
+				await handleShareMemberRemoval(removeMemberButton.dataset.shareRemoveMemberId);
+				return;
+			}
+
+			if (state.activeView === "share") {
 				return;
 			}
 
@@ -1532,8 +2277,13 @@ function initShoppingListPage(path) {
 
 			const storeLabelButton = target.closest("#list-store-toggle");
 			if (storeLabelButton) {
-				state.isStoreEditorOpen = !state.isStoreEditorOpen;
+				const isOpening = !state.isStoreEditorOpen;
+				state.isStoreEditorOpen = isOpening;
 				renderTitleAndStore();
+
+				if (isOpening) {
+					void ensureStoreEditorDataReady();
+				}
 				return;
 			}
 
@@ -1607,6 +2357,10 @@ function initShoppingListPage(path) {
 				return;
 			}
 
+			if (state.activeView === "share") {
+				return;
+			}
+
 			if (target.id === "list-layout-select") {
 				if (target.value === "__create_new_layout__") {
 					navigateToLayoutEditorWithStorePrefill();
@@ -1631,6 +2385,18 @@ function initShoppingListPage(path) {
 			const target = event.target;
 
 			if (!(target instanceof Element)) {
+				return;
+			}
+
+			if (target.id === "list-share-email-input") {
+				state.shareInviteEmail = target.value;
+				state.shareInviteError = "";
+				state.shareInviteSuccess = "";
+				renderShareManagement();
+				return;
+			}
+
+			if (state.activeView === "share") {
 				return;
 			}
 
@@ -1725,9 +2491,32 @@ function initShoppingListPage(path) {
 	);
 
 	pageRoot.addEventListener(
+		"submit",
+		async (event) => {
+			const target = event.target;
+
+			if (!(target instanceof Element)) {
+				return;
+			}
+
+			if (target.id !== "list-share-invite-form") {
+				return;
+			}
+
+			event.preventDefault();
+			await handleShareInviteSubmit();
+		},
+		{ signal },
+	);
+
+	pageRoot.addEventListener(
 		"keydown",
 		async (event) => {
 			const target = event.target;
+
+			if (state.activeView === "share") {
+				return;
+			}
 
 			if (target instanceof HTMLInputElement && target.id === "list-title-input") {
 				if (event.key === "Escape") {
@@ -1885,7 +2674,15 @@ export function renderShoppingListPage(path) {
 				</button>
 
 				<h1 id="list-title" class="list-page__title">Min Inköpslista</h1>
-				<span class="list-page__header-spacer" aria-hidden="true"></span>
+				<button
+					type="button"
+					id="list-share-button"
+					class="list-page__share-button"
+					aria-label="Hantera delning"
+					aria-pressed="false"
+				>
+					<i class="ti ti-users" aria-hidden="true"></i>
+				</button>
 			</header>
 
 			<div class="list-page__content page-container--narrow">
@@ -1942,12 +2739,13 @@ export function renderShoppingListPage(path) {
 			></button>
 
 			<section class="list-page__search-card" aria-label="Lägg till vara">
-				<label for="list-product-search" class="list-page__label">Sök vara</label>
+				<label for="list-product-search" class="sr-only">Lägg till vara</label>
 				<input
 					id="list-product-search"
 					class="input-field list-page__search-input"
 					type="search"
 					placeholder="Sök eller lägg till vara..."
+					aria-label="Lägg till vara"
 					autocomplete="off"
 					role="combobox"
 					aria-autocomplete="list"
@@ -1960,6 +2758,7 @@ export function renderShoppingListPage(path) {
 			<section id="list-suggestions-section" class="list-page__suggestion-card" aria-label="Vanliga varor" hidden></section>
 
 			<section id="list-grouped-items" class="list-page__groups" aria-live="polite"></section>
+			<section id="list-share-management" class="list-page__share-view" hidden aria-label="Hantera delning"></section>
 			</div>
 		</section>
 	`;
