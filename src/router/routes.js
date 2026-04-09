@@ -1,4 +1,4 @@
-import { renderHomePage } from "../pages/home/index.js";
+import { renderHomePage, setupHomePage } from "../pages/home/index.js";
 import { renderCreateListPage } from "../pages/create-list/index.js";
 import { renderLayoutEditorPage } from "../pages/layout-editor/index.js";
 import { renderShoppingListPage } from "../pages/shopping-list/index.js";
@@ -10,7 +10,8 @@ export const routes = [
   {
     pattern: /^\/$/,
     render: (path) => renderHomePage(path),
-    requiresAuth: true,
+    onMount: () => setupHomePage(),
+    requiresAuth: false,
   },
   {
     pattern: /^\/create-list($|\/)/,

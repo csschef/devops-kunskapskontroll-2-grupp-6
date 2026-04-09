@@ -15,8 +15,9 @@ function initializeApp() {
     const isAuthenticated = Boolean(session?.user);
     const path = window.location.pathname;
     const isAuthPage = /^\/(login|register)\/?$/.test(path);
+    const isPublicPath = path === "/" || isAuthPage;
 
-    if (!isAuthenticated && !isAuthPage) {
+    if (!isAuthenticated && !isPublicPath) {
       navigateTo("/login", { replace: true });
       return;
     }
