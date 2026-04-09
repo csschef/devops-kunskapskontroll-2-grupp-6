@@ -94,6 +94,7 @@ function parseLayoutEditorInitialState() {
 	const returnTo = normalizeReturnPath(firstNonEmpty(params.get("returnTo"), params.get("from")));
 	const sections = parseSectionsValue(firstNonEmpty(params.get("sections"), params.get("layoutSections"), params.get("sectionOrder")));
 	const isEditMode = params.get("mode") === "edit" || params.get("isEdit") === "1" || params.has("layoutId") || sections.length > 0;
+	const listId = firstNonEmpty(params.get("listId"), params.get("list_id"));
 
 	return {
 		storeName: firstNonEmpty(params.get("storeName"), params.get("store"), params.get("store_name")),
@@ -102,6 +103,7 @@ function parseLayoutEditorInitialState() {
 		layoutId: firstNonEmpty(params.get("layoutId"), params.get("id")),
 		isEditMode,
 		returnTo,
+		listId,
 	};
 }
 
@@ -1218,6 +1220,10 @@ async function handleSaveButtonClick(initialState) {
 		setLayoutEditorMessage(result.mode === "created" ? "Butikslayout sparad." : "Butikslayout uppdaterad.", "success");
 
 		window.setTimeout(() => {
+			if (initialState.listId) {
+				navigateTo(`/list/${initialState.listId}`);
+				return;
+			}
 			navigateOnCancel(initialState);
 		}, SAVE_SUCCESS_REDIRECT_DELAY_MS);
 	} catch (error) {
