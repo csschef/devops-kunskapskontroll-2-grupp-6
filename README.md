@@ -2,11 +2,11 @@
 
 ## Projektbeskrivning
 
-AISLE är en webbapplikation som hjälper användare att handla snabbare och mer effektivt. Användaren skapar en inköpslista och väljer sin butik — appen sorterar sedan listan automatiskt efter butikens gångordning, så att man handlar i rätt ordning utan att behöva gå fram och tillbaka. Butikslayouter skapas och delas av användarna själva via en inbyggd layout-editor.
+AISLE är en webbapplikation som hjälper användare att handla snabbare och mer effektivt. Användaren skapar en inköpslista och väljer sin butik - appen sorterar sedan listan automatiskt efter butikens gångordning, så att man handlar i rätt ordning utan att behöva gå fram och tillbaka. Butikslayouter skapas och delas av användarna själva via en inbyggd layout-editor.
 
 ## Länkar
 
-- Vercel: https://vercel.com/csschef/devops-kunskapskontroll-2-grupp-6
+- Vercel: https://devops-kunskapskontroll-2-grupp-6.vercel.app
 
 ## Ansvarsområden
 
