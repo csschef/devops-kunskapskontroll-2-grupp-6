@@ -1,3 +1,4 @@
+import "../login/auth.css";
 import { ensureProfileRow, signUp } from "../../auth-service.js";
 import { navigateTo } from "../../router/router.js";
 import registerValidationConfig from "../../config/register-validation.json";
