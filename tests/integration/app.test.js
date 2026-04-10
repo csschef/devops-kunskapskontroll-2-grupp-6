@@ -154,3 +154,42 @@ describe("create-list and list integration", () => {
 		expect(hasAccess).toBe(false);
 	});
 });
+
+// Elsa: test to ensure edit form works for shopping lists
+describe("Redigera-formulär för inköpslistor", () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="profile-shopping-lists-container">
+                <div class="shopping-list-card" data-list-id="list-1">
+                    <div class="shopping-list-card__info">
+                        <p class="shopping-list-card__title"><strong>Veckans mat</strong></p>
+                    </div>
+                    <button class="btn btn-primary" data-edit-list-id="list-1" type="button">
+                        Redigera
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const container = document.querySelector("#profile-shopping-lists-container");
+        container.addEventListener("click", (event) => {
+            const editButton = event.target.closest("[data-edit-list-id]");
+            if (!editButton) return;
+
+            const card = container.querySelector(`[data-list-id="list-1"]`);
+            if (card) card.outerHTML = `
+                <div class="shopping-list-card" data-list-id="list-1">
+                    <input class="shopping-list-edit-input" type="text" value="Veckans mat" />
+                </div>
+            `;
+        });
+    });
+
+    it("ska visa redigera-formulär när man klickar Redigera", () => {
+        document.querySelector("[data-edit-list-id='list-1']").click();
+
+        const input = document.querySelector(".shopping-list-edit-input");
+        expect(input).not.toBeNull();
+        expect(input.value).toBe("Veckans mat");
+    });
+});

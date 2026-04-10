@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { renderLayoutEditorPage } from "../../src/pages/layout-editor/index.js";
 import { createLatestListsMarkup, createTopLayoutsMarkup, createTopProductsMarkup, createStatsMarkup, createEmptyStateMarkup } from "../../src/pages/home/functions.js";
+import { renderShoppingListCard } from "../../src/pages/profile/profile-shopping-lists.js";
 
 beforeEach(() => {
 	// Clear the document body before each test to ensure a clean slate
@@ -120,5 +121,22 @@ describe("create-list and list unit tests", () => {
 
 		expect(items).toHaveLength(1);
 		expect(items[0].shopping_list_id).toBe(listId);
+	});
+});
+
+// Elsa: unit test to ensure shopping list card shows correct status based on list completion
+describe("renderShoppingListCard", () => {
+	let list;
+ 
+	beforeEach(() => {
+		list = {
+			title: "Veckans mat",
+			items: [],
+		};
+	});
+ 
+	test("ska visa 'Aktiv' när listan inte är klar", () => {
+		const html = renderShoppingListCard(list);
+		expect(html).toContain("Aktiv");
 	});
 });

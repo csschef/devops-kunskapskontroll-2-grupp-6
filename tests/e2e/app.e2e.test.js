@@ -59,3 +59,22 @@ test("non-existing list id should redirect to home", async ({ page }) => {
 	await page.goto("/list/00000000-0000-4000-8000-000000000000");
 	await expect(page).toHaveURL(/\/$/);
 });
+
+// Elsa: profile page shows shopping list names
+test("profile page displays shopping list names", async ({ page }) => {
+	if (!e2eEmail || !e2ePassword) {
+		throw new Error("E2E_EMAIL and E2E_PASSWORD must be set to run profile shopping list display e2e test.");
+	}
+
+	await page.goto("/login");
+	await page.fill("#login-email", e2eEmail);
+	await page.fill("#login-password", e2ePassword);
+	await page.click("#login-submit");
+
+	await expect(page).toHaveURL(/\/$/);
+
+	await page.goto("/profile");
+	await expect(page.getByRole("heading", { name: "Mina inköpslistor" })).toBeVisible();
+	await expect(page.locator(".shopping-list-card").first()).toBeVisible();
+	await expect(page.locator(".shopping-list-card__title").first()).toHaveText(/.+/);
+});
