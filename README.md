@@ -1,5 +1,18 @@
 # DevOps Kunskapskontroll 2 - Grupp 6
 
+## Gruppmedlemmar
+
+[Sebastian](https://github.com/csschef)  
+[Viktor](https://github.com/LifeGoal)  
+[Hampus](https://github.com/HampusAndersson01)  
+[Elsa](https://github.com/ElsaBacklund)  
+
+## Uppgiftsbeskrivning
+
+I denna uppgift arbetade vi i grupp med att ta fram ett fullstack-projekt där vi tillämpade DevOps-principer och integrerade flera av de tekniker vi lärt oss under kursen. Arbetet inleddes med en behovsanalys där vi identifierade ett relevant samhällsproblem och undersökte målgruppens behov, gärna med hjälp av AI och sociala medier. Vidare hade vi möjlighet att göra en marknadsanalys för att förstå konkurrens och betalvilja.
+
+Utvecklingsfasen omfattade allt från att ta fram en kravspecifikation och skapa ett ER-diagram till att bygga upp en Postgres-databas i Supabase, som exponerades via ett API. Vi satte upp CI/CD-flöden med GitHub Actions och Vercel, och införde regler för kodgranskning och pull requests för att säkerställa kvalitet och samarbete. Testning var en central del, där vi implementerade både enhets-, integrations- och end-to-end-tester. Varje gruppmedlem ansvarade för minst en sida i applikationen, inklusive tillhörande API-anrop och tester.
+
 ## Projektbeskrivning
 
 AISLE är en webbapplikation som hjälper användare att handla snabbare och mer effektivt. Användaren skapar en inköpslista och väljer sin butik - appen sorterar sedan listan automatiskt efter butikens gångordning, så att man handlar i rätt ordning utan att behöva gå fram och tillbaka. Butikslayouter skapas och delas av användarna själva via en inbyggd layout-editor.
